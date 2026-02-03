@@ -216,6 +216,26 @@ class OmniServeCommand(CLISubcommand):
         omni_config_group.add_argument(
             "--cfg-parallel-size", type=int, default=1, help="Number of GPUs for CFG parallel computation"
         )
+
+        # Diffusion LoRA parameters
+        omni_config_group.add_argument(
+            "--diffusion-lora-path",
+            "--lora-path",
+            dest="lora_path",
+            type=str,
+            default=None,
+            help="Path to LoRA adapter for diffusion stages. "
+            "Pre-loads the LoRA at server startup for all diffusion requests.",
+        )
+        omni_config_group.add_argument(
+            "--diffusion-lora-scale",
+            "--lora-scale",
+            dest="lora_scale",
+            type=float,
+            default=None,
+            help="Scale factor for diffusion LoRA adapter (default: 1.0). "
+            "Only used when --diffusion-lora-path is specified.",
+        )
         return serve_parser
 
 
