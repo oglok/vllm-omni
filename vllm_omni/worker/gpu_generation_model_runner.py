@@ -59,7 +59,8 @@ class GPUGenerationModelRunner(OmniGPUModelRunner):
             self.input_batch.remove_request(req_id)
             # update the request state in self.input_batch
             self.input_batch.add_request(req_state)
-            self._init_mrope_positions(req_state)
+            if self.uses_mrope:
+                self._init_mrope_positions(req_state)
 
     @torch.inference_mode()
     def execute_model(
