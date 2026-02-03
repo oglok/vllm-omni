@@ -77,11 +77,19 @@ def get_qwen_image_edit_pre_process_func(
                 prompt["additional_information"] = {}
 
             # Only handles single image
-            if raw_image is None or isinstance(raw_image, list):
+            if raw_image is None:
                 raise ValueError(
-                    """Received no image or a list of image. Only a single image is supported by this model."""
-                    """Please correctly set `"multi_modal_data": {"image": <an image object or file path>, …}`"""
+                    """Received no image. Please correctly set `"multi_modal_data": {"image": <an image object or file path>, …}`"""
                 )
+            # Handle single-item list (from /images/edits endpoint)
+            if isinstance(raw_image, list):
+                if len(raw_image) == 1:
+                    raw_image = raw_image[0]
+                else:
+                    raise ValueError(
+                        f"""Received {len(raw_image)} images. Only a single image is supported by this model."""
+                        """Please correctly set `"multi_modal_data": {"image": <an image object or file path>, …}`"""
+                    )
 
             if isinstance(raw_image, str):
                 image = PIL.Image.open(raw_image)
