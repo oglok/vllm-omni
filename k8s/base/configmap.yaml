@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vllm-omni-config
+  namespace: vllm-omni
+  labels:
+    app.kubernetes.io/name: vllm-omni
+    app.kubernetes.io/component: config
+data:
+  # The model to serve
+  # - Tongyi-MAI/Z-Image-Turbo: text-to-image (smaller/faster)
+  # - stabilityai/stable-diffusion-3.5-medium: text-to-image, ~6GB VRAM
+  # - Qwen/Qwen-Image: text-to-image, ~40GB+ VRAM
+  # - Qwen2.5-Omni-7B: multimodal LLM (2 GPUs)
+  MODEL_NAME: "Tongyi-MAI/Z-Image-Turbo"
+  # Server port
+  PORT: "8000"
+  # Additional vllm serve arguments (optional)
+  # For large models that don't fit in GPU memory, add:
+  # --vae-use-slicing --vae-use-tiling --enable-cpu-offload
+  EXTRA_ARGS: ""

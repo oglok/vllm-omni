@@ -1,0 +1,111 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm-omni
+  namespace: vllm-omni
+  labels:
+    app.kubernetes.io/name: vllm-omni
+    app.kubernetes.io/component: inference
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vllm-omni
+  template:
+    metadata:
+      labels:
+        app: vllm-omni
+        app.kubernetes.io/name: vllm-omni
+        app.kubernetes.io/component: inference
+    spec:
+      containers:
+        - name: vllm-omni
+          image: vllm/vllm-omni:v0.14.0
+          imagePullPolicy: Always
+          command:
+            - /bin/sh
+            - -c
+            - |
+              vllm serve ${MODEL_NAME} --omni --host 0.0.0.0 --port ${PORT} ${EXTRA_ARGS}
+          env:
+            - name: MODEL_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: vllm-omni-config
+                  key: MODEL_NAME
+            - name: PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: vllm-omni-config
+                  key: PORT
+            - name: EXTRA_ARGS
+              valueFrom:
+                configMapKeyRef:
+                  name: vllm-omni-config
+                  key: EXTRA_ARGS
+            # HuggingFace cache directory - must be writable
+            - name: HF_HOME
+              value: "/cache/huggingface"
+            # Ensure HOME points to a writable directory
+            - name: HOME
+              value: "/cache"
+            # HuggingFace token for gated models (optional)
+            # Create secret: oc create secret generic hf-token --from-literal=token=hf_xxx -n vllm-omni
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: hf-token
+                  key: token
+                  optional: true
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          resources:
+            # Note: GPU requirements vary by model
+            # - Qwen/Qwen-Image (text-to-image): 1 GPU
+            # - Qwen2.5-Omni-7B (multimodal): 2 GPUs
+            requests:
+              memory: "16Gi"
+              cpu: "4"
+              nvidia.com/gpu: "1"
+            limits:
+              memory: "32Gi"
+              cpu: "8"
+              nvidia.com/gpu: "1"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 120
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          volumeMounts:
+            - name: shm
+              mountPath: /dev/shm
+            - name: cache
+              mountPath: /cache
+      volumes:
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: "8Gi"
+        - name: cache
+          emptyDir: {}
+      tolerations:
+        - key: "nvidia.com/gpu"
+          operator: "Exists"
+          effect: "NoSchedule"
+      nodeSelector:
+        # Uncomment and adjust based on your cluster's GPU node labels
+        # accelerator: nvidia-gpu
+        {}
