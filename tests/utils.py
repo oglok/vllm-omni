@@ -517,3 +517,129 @@ class GPUMemoryMonitor:
 
     def __del__(self):
         self.stop()
+
+
+# ============================================================================
+# Text Comparison Utilities
+# ============================================================================
+
+
+def compare_suffix(
+    actual: str,
+    expected: str,
+    num_chars: int = 50,
+    normalize_whitespace: bool = True,
+) -> bool:
+    """Compare the last N characters of two strings.
+
+    Useful for validating model output where the ending matters most,
+    such as verifying correct generation termination or final tokens.
+
+    Args:
+        actual: The actual output string to check.
+        expected: The expected/reference string.
+        num_chars: Number of trailing characters to compare (default: 50).
+        normalize_whitespace: If True, normalize whitespace before comparison.
+
+    Returns:
+        True if the suffixes match, False otherwise.
+
+    Example:
+        >>> compare_suffix("Hello world!", "Hello world!", num_chars=6)
+        True
+        >>> compare_suffix("Hello world!", "Hello there!", num_chars=6)
+        False
+    """
+    if normalize_whitespace:
+        actual = " ".join(actual.split())
+        expected = " ".join(expected.split())
+
+    actual_suffix = actual[-num_chars:] if len(actual) >= num_chars else actual
+    expected_suffix = expected[-num_chars:] if len(expected) >= num_chars else expected
+
+    return actual_suffix == expected_suffix
+
+
+def compare_suffix_ratio(
+    actual: str,
+    expected: str,
+    num_chars: int = 50,
+    threshold: float = 0.9,
+    normalize_whitespace: bool = True,
+) -> bool:
+    """Compare suffixes with a similarity threshold.
+
+    Uses character-level matching to compute similarity ratio between
+    the last N characters of two strings.
+
+    Args:
+        actual: The actual output string to check.
+        expected: The expected/reference string.
+        num_chars: Number of trailing characters to compare (default: 50).
+        threshold: Minimum similarity ratio required (0.0 to 1.0, default: 0.9).
+        normalize_whitespace: If True, normalize whitespace before comparison.
+
+    Returns:
+        True if similarity ratio >= threshold, False otherwise.
+
+    Example:
+        >>> compare_suffix_ratio("Hello world!", "Hello world?", threshold=0.9)
+        True  # 11/12 = 0.917 >= 0.9
+    """
+    if normalize_whitespace:
+        actual = " ".join(actual.split())
+        expected = " ".join(expected.split())
+
+    actual_suffix = actual[-num_chars:] if len(actual) >= num_chars else actual
+    expected_suffix = expected[-num_chars:] if len(expected) >= num_chars else expected
+
+    if not actual_suffix and not expected_suffix:
+        return True
+    if not actual_suffix or not expected_suffix:
+        return False
+
+    # Compute character-level similarity
+    matches = sum(a == e for a, e in zip(actual_suffix, expected_suffix))
+    max_len = max(len(actual_suffix), len(expected_suffix))
+    ratio = matches / max_len
+
+    return ratio >= threshold
+
+
+def assert_suffix_match(
+    actual: str,
+    expected: str,
+    num_chars: int = 50,
+    normalize_whitespace: bool = True,
+    msg: str | None = None,
+) -> None:
+    """Assert that the suffixes of two strings match.
+
+    Raises AssertionError with detailed diff if they don't match.
+
+    Args:
+        actual: The actual output string to check.
+        expected: The expected/reference string.
+        num_chars: Number of trailing characters to compare (default: 50).
+        normalize_whitespace: If True, normalize whitespace before comparison.
+        msg: Optional custom error message.
+
+    Raises:
+        AssertionError: If suffixes don't match.
+    """
+    if compare_suffix(actual, expected, num_chars, normalize_whitespace):
+        return
+
+    if normalize_whitespace:
+        actual = " ".join(actual.split())
+        expected = " ".join(expected.split())
+
+    actual_suffix = actual[-num_chars:] if len(actual) >= num_chars else actual
+    expected_suffix = expected[-num_chars:] if len(expected) >= num_chars else expected
+
+    error_msg = msg or (
+        f"Suffix mismatch (last {num_chars} chars):\n"
+        f"  Expected: ...{expected_suffix!r}\n"
+        f"  Actual:   ...{actual_suffix!r}"
+    )
+    raise AssertionError(error_msg)
