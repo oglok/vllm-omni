@@ -1,0 +1,107 @@
+name: Pytest
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - 'docs/**'
+      - 'examples/**'
+      - '**.md'
+      - '.gitignore'
+      - '.gitattributes'
+      - 'LICENSE'
+  pull_request:
+    branches:
+      - main
+    paths-ignore:
+      - 'docs/**'
+      - 'examples/**'
+      - '**.md'
+      - '.gitignore'
+      - '.gitattributes'
+      - 'LICENSE'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  # L1: Unit & Logic Tests (CPU only, fast)
+  # These tests verify algorithmic correctness without GPU
+  unit-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+      fail-fast: false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Install dependencies
+        env:
+          UV_SYSTEM_PYTHON: 1
+        run: |
+          uv pip install -e ".[dev]" --no-build-isolation
+          uv pip install vllm
+
+      - name: Run CPU unit tests
+        env:
+          VLLM_TARGET_DEVICE: cpu
+        run: |
+          pytest tests/ -v \
+            -m "cpu or not (gpu or cuda or rocm or npu)" \
+            --ignore=tests/e2e \
+            --ignore=tests/benchmarks \
+            -x \
+            --tb=short \
+            -q
+
+  # L2: API & Integration Tests (CPU with mocked GPU)
+  # Verify server lifecycle and API contracts
+  api-tests:
+    runs-on: ubuntu-latest
+    needs: unit-tests
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: 'pip'
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Install dependencies
+        env:
+          UV_SYSTEM_PYTHON: 1
+        run: |
+          uv pip install -e ".[dev]" --no-build-isolation
+          uv pip install vllm
+
+      - name: Run API tests
+        env:
+          VLLM_TARGET_DEVICE: cpu
+        run: |
+          pytest tests/entrypoints/ -v \
+            -m "cpu or not (gpu or cuda or rocm or npu)" \
+            -x \
+            --tb=short \
+            -q
