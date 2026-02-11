@@ -77,11 +77,11 @@ Define ports for the pods
 Define service name
 */}}
 {{- define "chart.service-name" -}}
-{{-  if .Values.serviceName }}
-{{-    .Values.serviceName | lower | trim }}
-{{-  else }}
-"{{ .Release.Name }}-service"
-{{-  end }}
+{{-  if .Values.serviceName -}}
+{{ .Values.serviceName | lower | trim }}
+{{-  else -}}
+{{ printf "%s-service" .Release.Name }}
+{{-  end -}}
 {{- end }}
 
 {{/*
@@ -189,7 +189,7 @@ Define user for the main container
 {{- define "chart.user" }}
 {{-   if .Values.image.runAsUser  }}
 runAsUser:
-{{-     with .Values.runAsUser }}
+{{-     with .Values.image.runAsUser }}
 {{-       toYaml . | nindent 2 }}
 {{-     end }}
 {{-   end }}
