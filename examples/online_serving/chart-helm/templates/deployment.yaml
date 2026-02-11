@@ -59,7 +59,7 @@ spec:
           - name: shm
             mountPath: /dev/shm
           - name: model-cache
-            mountPath: /cache/huggingface
+            mountPath: /cache
 
         {{- with .Values.extraContainers }}
         {{ toYaml . | nindent 8 }}
@@ -91,8 +91,7 @@ spec:
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- if and (gt (int (index .Values.resources.requests "nvidia.com/gpu")) 0) (gt (int (index .Values.resources.limits "nvidia.com/gpu")) 0) }}
-      runtimeClassName: nvidia
+      {{- if .Values.gpuModels }}
       affinity:
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
@@ -100,8 +99,6 @@ spec:
               - matchExpressions:
                 - key: nvidia.com/gpu.product
                   operator: In
-                  {{- with .Values.gpuModels }}
                   values:
-                    {{- toYaml . | nindent 20 }}
-                  {{- end }}
+                    {{- toYaml .Values.gpuModels | nindent 20 }}
       {{- end }}

@@ -142,9 +142,15 @@ Define chart external ConfigMaps and Secrets
 {{- end }}
 
 {{/*
-Define liveness and readiness probes
+Define startup, liveness and readiness probes
 */}}
 {{- define "chart.probes" -}}
+{{-   if .Values.startupProbe  }}
+startupProbe:
+{{-     with .Values.startupProbe }}
+{{-       toYaml . | nindent 2 }}
+{{-     end }}
+{{-   end }}
 {{-   if .Values.readinessProbe  }}
 readinessProbe:
 {{-     with .Values.readinessProbe }}
