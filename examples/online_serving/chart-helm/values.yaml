@@ -50,9 +50,10 @@ resources:
     # -- Number of GPUs
     nvidia.com/gpu: 1
 
-# -- GPU model types for node affinity scheduling
-gpuModels:
-  - "TYPE_GPU_USED"
+# -- GPU model types for node affinity scheduling (optional)
+# -- Leave empty to schedule on any GPU node. Set to restrict to specific GPU types.
+# -- Example: ["NVIDIA-A100-SXM4-40GB"]
+gpuModels: []
 
 # -- vllm-omni specific CLI arguments
 omniArgs:
@@ -127,14 +128,28 @@ extraInit:
 # -- Additional sidecar containers
 extraContainers: []
 
+# -- Startup probe configuration
+# -- Protects slow-starting containers. Liveness and readiness probes
+# -- do not start until the startup probe succeeds.
+# -- failureThreshold * periodSeconds = max startup time (40 * 30 = 1200s = 20 min)
+startupProbe:
+  # -- HTTP check configuration
+  httpGet:
+    # -- Path to check
+    path: /health
+    # -- Port to check
+    port: 8000
+  # -- Failures before killing the container
+  failureThreshold: 40
+  # -- How often to perform the probe
+  periodSeconds: 30
+
 # -- Readiness probe configuration
 readinessProbe:
-  # -- Seconds before readiness probe starts
-  initialDelaySeconds: 60
   # -- How often to perform the probe
   periodSeconds: 10
   # -- Failures before marking unready
-  failureThreshold: 6
+  failureThreshold: 3
   # -- HTTP check configuration
   httpGet:
     # -- Path to check
@@ -144,10 +159,8 @@ readinessProbe:
 
 # -- Liveness probe configuration
 livenessProbe:
-  # -- Seconds before liveness probe starts
-  initialDelaySeconds: 120
   # -- Failures before restarting
-  failureThreshold: 5
+  failureThreshold: 3
   # -- How often to perform the probe
   periodSeconds: 15
   # -- HTTP check configuration
