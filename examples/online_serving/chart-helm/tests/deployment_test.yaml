@@ -103,7 +103,7 @@ tests:
           path: spec.template.spec.containers[0].volumeMounts
           content:
             name: model-cache
-            mountPath: /cache/huggingface
+            mountPath: /cache
       - contains:
           path: spec.template.spec.volumes
           content:
