@@ -170,6 +170,22 @@ livenessProbe:
     # -- Port to check
     port: 8000
 
+# -- Ingress configuration
+ingress:
+  # -- Enable Ingress
+  enabled: false
+  # -- Ingress class name (e.g., nginx, traefik)
+  ingressClassName: ""
+  # -- Hostname for the Ingress rule
+  host: "vllm-omni.example.com"
+  # -- Additional annotations
+  annotations: {}
+  # -- TLS configuration
+  tls: []
+  #  - secretName: vllm-omni-tls
+  #    hosts:
+  #      - vllm-omni.example.com
+
 # -- Node selector for pod scheduling
 nodeSelector: {}
 
