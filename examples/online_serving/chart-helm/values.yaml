@@ -137,8 +137,8 @@ startupProbe:
   httpGet:
     # -- Path to check
     path: /health
-    # -- Port to check
-    port: 8000
+    # -- Port to check (uses named port to stay in sync with containerPort)
+    port: "container-port"
   # -- Failures before killing the container
   failureThreshold: 40
   # -- How often to perform the probe
@@ -154,8 +154,8 @@ readinessProbe:
   httpGet:
     # -- Path to check
     path: /health
-    # -- Port to check
-    port: 8000
+    # -- Port to check (uses named port to stay in sync with containerPort)
+    port: "container-port"
 
 # -- Liveness probe configuration
 livenessProbe:
@@ -167,8 +167,8 @@ livenessProbe:
   httpGet:
     # -- Path to check
     path: /health
-    # -- Port to check
-    port: 8000
+    # -- Port to check (uses named port to stay in sync with containerPort)
+    port: "container-port"
 
 # -- Ingress configuration
 ingress:
@@ -195,5 +195,3 @@ tolerations: []
 # -- Labels applied to all resources
 labels:
   app: "vllm-omni"
-  environment: "test"
-  release: "test"
