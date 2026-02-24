@@ -1,3 +1,4 @@
+{{- if gt (int .Values.replicaCount) 1 }}
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
@@ -8,3 +9,4 @@ spec:
   selector:
     matchLabels:
     {{- include "chart.labels" . | nindent 6 }}
+{{- end }}

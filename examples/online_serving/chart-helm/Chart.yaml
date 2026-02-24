@@ -8,7 +8,7 @@ type: application
 # Chart version - increment on each change to the chart
 version: 0.1.0
 
-# vllm-omni application version
+# vllm-omni application version — keep in sync with image.tag in values.yaml
 appVersion: "0.14.0"
 
 maintainers:
