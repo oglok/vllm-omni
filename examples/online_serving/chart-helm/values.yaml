@@ -9,7 +9,7 @@ image:
   # -- Image repository
   repository: "vllm/vllm-omni"
   # -- Image tag
-  tag: "v0.14.0"
+  tag: "v0.16.0"
   # -- Override the container command entirely. If empty, the chart constructs
   # -- it automatically from model + omniArgs.
   command: []

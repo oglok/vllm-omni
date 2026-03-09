@@ -9,7 +9,7 @@ type: application
 version: 0.1.0
 
 # vllm-omni application version — keep in sync with image.tag in values.yaml
-appVersion: "0.14.0"
+appVersion: "0.16.0"
 
 maintainers:
   - name: vllm-omni-team
