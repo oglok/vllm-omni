@@ -9,6 +9,14 @@ from vllm_omni.diffusion.models.ltx2.pipeline_ltx2 import (
     get_ltx2_post_process_func,
     load_transformer_config,
 )
+from vllm_omni.diffusion.models.ltx2.pipeline_ltx2_3 import (
+    LTX23Pipeline,
+    LTX23TwoStagesPipeline,
+)
+from vllm_omni.diffusion.models.ltx2.pipeline_ltx2_3_image2video import (
+    LTX23ImageToVideoPipeline,
+    LTX23ImageToVideoTwoStagesPipeline,
+)
 from vllm_omni.diffusion.models.ltx2.pipeline_ltx2_image2video import (
     LTX2ImageToVideoPipeline,
     LTX2ImageToVideoTwoStagesPipeline,
@@ -21,6 +29,10 @@ __all__ = [
     "LTX2LatentUpsamplePipeline",
     "LTX2TwoStagesPipeline",
     "LTX2ImageToVideoTwoStagesPipeline",
+    "LTX23Pipeline",
+    "LTX23ImageToVideoPipeline",
+    "LTX23TwoStagesPipeline",
+    "LTX23ImageToVideoTwoStagesPipeline",
     "get_ltx2_post_process_func",
     "load_transformer_config",
     "create_transformer_from_config",

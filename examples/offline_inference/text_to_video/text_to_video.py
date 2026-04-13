@@ -431,7 +431,7 @@ def main():
     video_array = _ensure_frame_list(video_array)
 
     use_ltx2_export = False
-    if args.model and "ltx" in str(args.model).lower():
+    if args.model and ("ltx" in str(args.model).lower() or "LTX" in str(args.model)):
         use_ltx2_export = True
     if audio is not None:
         use_ltx2_export = True

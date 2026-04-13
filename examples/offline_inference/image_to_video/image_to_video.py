@@ -209,8 +209,14 @@ def main():
     generator = torch.Generator(device=current_omni_platform.device_type).manual_seed(args.seed)
     model_name = str(args.model).lower() if args.model is not None else ""
     model_class_name = args.model_class_name
-    is_ltx2 = "ltx2" in model_name or (model_class_name and "ltx2" in model_class_name.lower())
-    if model_class_name is None and is_ltx2:
+    is_ltx2 = "ltx2" in model_name or "ltx-2" in model_name or (model_class_name and "ltx2" in model_class_name.lower())
+    is_ltx23 = (
+        "ltx-2.3" in model_name or "ltx2.3" in model_name or (model_class_name and "ltx23" in model_class_name.lower())
+    )
+    is_ltx2 = is_ltx2 or is_ltx23
+    if model_class_name is None and is_ltx23:
+        model_class_name = "LTX23ImageToVideoPipeline"
+    elif model_class_name is None and is_ltx2:
         model_class_name = "LTX2ImageToVideoPipeline"
 
     # Load input image
