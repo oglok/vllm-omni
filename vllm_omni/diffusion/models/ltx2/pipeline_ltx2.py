@@ -17,6 +17,11 @@ from diffusers import AutoencoderKLLTX2Audio, AutoencoderKLLTX2Video, FlowMatchE
 from diffusers.pipelines.ltx2 import LTX2TextConnectors
 from diffusers.pipelines.ltx2.utils import DISTILLED_SIGMA_VALUES, STAGE_2_DISTILLED_SIGMA_VALUES
 from diffusers.pipelines.ltx2.vocoder import LTX2Vocoder
+
+try:
+    from diffusers.pipelines.ltx2.vocoder import LTX2VocoderWithBWE
+except ImportError:
+    LTX2VocoderWithBWE = None  # diffusers < 0.38.0
 from diffusers.pipelines.stable_diffusion.pipeline_stable_diffusion import rescale_noise_cfg, retrieve_timesteps
 from diffusers.utils.torch_utils import randn_tensor
 from diffusers.video_processor import VideoProcessor
@@ -181,12 +186,25 @@ class LTX2Pipeline(nn.Module, CFGParallelMixin, ProgressBarMixin):
             torch_dtype=dtype,
             local_files_only=local_files_only,
         ).to(self.device)
-        self.vocoder = LTX2Vocoder.from_pretrained(
-            model,
-            subfolder="vocoder",
-            torch_dtype=dtype,
-            local_files_only=local_files_only,
-        ).to(self.device)
+        # LTX-2 uses LTX2Vocoder, LTX-2.3 uses LTX2VocoderWithBWE (bandwidth
+        # extension for 48kHz audio).  Try the BWE variant first, then fall
+        # back to the standard vocoder for older models / diffusers versions.
+        vocoder_cls = LTX2VocoderWithBWE or LTX2Vocoder
+        try:
+            self.vocoder = vocoder_cls.from_pretrained(
+                model,
+                subfolder="vocoder",
+                torch_dtype=dtype,
+                local_files_only=local_files_only,
+            ).to(self.device)
+        except (TypeError, OSError, ValueError):
+            # Fall back if BWE vocoder fails (e.g. LTX-2 model with old config)
+            self.vocoder = LTX2Vocoder.from_pretrained(
+                model,
+                subfolder="vocoder",
+                torch_dtype=dtype,
+                local_files_only=local_files_only,
+            ).to(self.device)
 
         transformer_config = load_transformer_config(model, "transformer", local_files_only)
         self.transformer = create_transformer_from_config(transformer_config)
