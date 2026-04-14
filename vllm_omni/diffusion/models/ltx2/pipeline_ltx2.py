@@ -964,7 +964,7 @@ class LTX2Pipeline(nn.Module, CFGParallelMixin, ProgressBarMixin):
 
         additive_attention_mask = (1 - prompt_attention_mask.to(prompt_embeds.dtype)) * -1000000.0
         connector_prompt_embeds, connector_audio_prompt_embeds, connector_attention_mask = self.connectors(
-            prompt_embeds, additive_attention_mask, additive_mask=True
+            prompt_embeds, additive_attention_mask
         )
 
         negative_connector_prompt_embeds = None
@@ -981,7 +981,6 @@ class LTX2Pipeline(nn.Module, CFGParallelMixin, ProgressBarMixin):
             ) = self.connectors(
                 negative_prompt_embeds,
                 negative_additive_attention_mask,
-                additive_mask=True,
             )
 
         latent_num_frames = (num_frames - 1) // self.vae_temporal_compression_ratio + 1
