@@ -1434,9 +1434,14 @@ class LTX2VideoTransformer3DModel(nn.Module):
         # 3. Timestep Modulation Params and Embedding
         # 3.1. Global Timestep Modulation Parameters (except for cross-attention) and timestep + size embedding
         # time_embed and audio_time_embed calculate both the timestep embedding and (global) modulation parameters
-        self.time_embed = LTX2AdaLayerNormSingle(inner_dim, num_mod_params=6, use_additional_conditions=False)
+        # LTX-2.3 with cross_attn_mod uses 9 mod params (extra 3 for cross-attn); LTX-2 uses 6.
+        video_num_mod_params = 9 if cross_attn_mod else 6
+        audio_num_mod_params = 9 if audio_cross_attn_mod else 6
+        self.time_embed = LTX2AdaLayerNormSingle(
+            inner_dim, num_mod_params=video_num_mod_params, use_additional_conditions=False
+        )
         self.audio_time_embed = LTX2AdaLayerNormSingle(
-            audio_inner_dim, num_mod_params=6, use_additional_conditions=False
+            audio_inner_dim, num_mod_params=audio_num_mod_params, use_additional_conditions=False
         )
 
         # 3.2. Global Cross Attention Modulation Parameters
@@ -1461,8 +1466,10 @@ class LTX2VideoTransformer3DModel(nn.Module):
             audio_inner_dim, num_mod_params=1, use_additional_conditions=False
         )
 
-        # 3.3. LTX-2.3: Audio prompt timestep embedding (for STG / perturbed attention)
-        if perturbed_attn:
+        # 3.3. LTX-2.3: Prompt modulation (for cross-attention adaln / STG)
+        self.prompt_modulation = cross_attn_mod or audio_cross_attn_mod
+        if self.prompt_modulation:
+            self.prompt_adaln = LTX2AdaLayerNormSingle(inner_dim, num_mod_params=2, use_additional_conditions=False)
             self.audio_prompt_adaln = LTX2AdaLayerNormSingle(
                 audio_inner_dim, num_mod_params=2, use_additional_conditions=False
             )
