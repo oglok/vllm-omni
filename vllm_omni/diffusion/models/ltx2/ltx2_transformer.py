@@ -1426,10 +1426,13 @@ class LTX2VideoTransformer3DModel(nn.Module):
         self.audio_proj_in = nn.Linear(audio_in_channels, audio_inner_dim)
 
         # 2. Prompt embeddings
-        self.caption_projection = PixArtAlphaTextProjection(in_features=caption_channels, hidden_size=inner_dim)
-        self.audio_caption_projection = PixArtAlphaTextProjection(
-            in_features=caption_channels, hidden_size=audio_inner_dim
-        )
+        # LTX-2 (use_prompt_embeddings=True): caption projection is in the transformer
+        # LTX-2.3 (use_prompt_embeddings=False): caption projection is in the connectors
+        if use_prompt_embeddings:
+            self.caption_projection = PixArtAlphaTextProjection(in_features=caption_channels, hidden_size=inner_dim)
+            self.audio_caption_projection = PixArtAlphaTextProjection(
+                in_features=caption_channels, hidden_size=audio_inner_dim
+            )
 
         # 3. Timestep Modulation Params and Embedding
         # 3.1. Global Timestep Modulation Parameters (except for cross-attention) and timestep + size embedding
