@@ -50,6 +50,7 @@ def _import_ltx23_utils():
         "_RAW_AUDIO_VAE_PREFIX",
         "_RAW_VOCODER_PREFIX",
         "_RAW_CONNECTORS_PREFIX",
+        "_DEFAULT_TEXT_ENCODER_REPO",
         "_resolve_safetensors_path",
         "_load_safetensors_metadata",
         "_load_component_weights_from_safetensors",
@@ -72,16 +73,18 @@ def _import_ltx23_utils():
     ast.fix_missing_locations(new_tree)
     code = compile(new_tree, str(_MODULE_PATH), "exec")
 
+    import logging
+
+    import safetensors
+
     ns: dict = {
         "__builtins__": __builtins__,
         "os": os,
         "json": json,
         "torch": torch,
+        "safetensors": safetensors,
+        "logger": logging.getLogger("test_ltx2_3"),
     }
-    # safetensors is needed by the metadata loader
-    import safetensors
-
-    ns["safetensors"] = safetensors
 
     exec(code, ns)
 
@@ -95,6 +98,7 @@ def _import_ltx23_utils():
 # Fall back to the stub-based loader for environments without vllm.
 try:
     from vllm_omni.diffusion.models.ltx2.pipeline_ltx2_3 import (
+        _DEFAULT_TEXT_ENCODER_REPO,
         _RAW_AUDIO_VAE_PREFIX,
         _RAW_CONNECTORS_PREFIX,
         _RAW_TRANSFORMER_PREFIX,
@@ -114,6 +118,7 @@ except (ImportError, ModuleNotFoundError):
     _RAW_AUDIO_VAE_PREFIX = _mod._RAW_AUDIO_VAE_PREFIX
     _RAW_VOCODER_PREFIX = _mod._RAW_VOCODER_PREFIX
     _RAW_CONNECTORS_PREFIX = _mod._RAW_CONNECTORS_PREFIX
+    _DEFAULT_TEXT_ENCODER_REPO = _mod._DEFAULT_TEXT_ENCODER_REPO
     _resolve_safetensors_path = _mod._resolve_safetensors_path
     _load_safetensors_metadata = _mod._load_safetensors_metadata
     _load_component_weights_from_safetensors = _mod._load_component_weights_from_safetensors
@@ -344,14 +349,6 @@ class TestGetTextEncoderPath:
         )
         assert _get_text_encoder_path(cfg) == te_path
 
-    def test_returns_hf_id_when_path_not_exists(self):
-        cfg = _FakeODConfig(
-            model="/some/model",
-            custom_pipeline_args={"text_encoder_path": "google/gemma-3-4b"},
-        )
-        # Returns the string even if not a local path (could be HF model ID)
-        assert _get_text_encoder_path(cfg) == "google/gemma-3-4b"
-
     def test_from_text_encoder_subdirectory(self, tmp_path):
         model_dir = tmp_path / "model"
         te_dir = model_dir / "text_encoder"
@@ -359,13 +356,75 @@ class TestGetTextEncoderPath:
         cfg = _FakeODConfig(model=str(model_dir))
         assert _get_text_encoder_path(cfg) == str(model_dir)
 
-    def test_returns_none_when_nothing_found(self, tmp_path):
-        cfg = _FakeODConfig(model=str(tmp_path))
-        assert _get_text_encoder_path(cfg) is None
+    def test_auto_downloads_from_default_repo(self, tmp_path, monkeypatch):
+        """When no local path is found, auto-downloads from _DEFAULT_TEXT_ENCODER_REPO."""
+        downloaded_to = str(tmp_path / "downloaded")
+        os.makedirs(downloaded_to)
 
-    def test_none_custom_args(self, tmp_path):
+        def fake_snapshot_download(repo_id, **kwargs):
+            assert repo_id == _DEFAULT_TEXT_ENCODER_REPO
+            assert "text_encoder/*" in kwargs.get("allow_patterns", [])
+            assert "tokenizer/*" in kwargs.get("allow_patterns", [])
+            return downloaded_to
+
+        monkeypatch.setattr("huggingface_hub.snapshot_download", fake_snapshot_download)
+
+        cfg = _FakeODConfig(model=str(tmp_path))
+        result = _get_text_encoder_path(cfg)
+        assert result == downloaded_to
+
+    def test_auto_downloads_from_custom_repo(self, tmp_path, monkeypatch):
+        """text_encoder_model overrides the default download repo."""
+        downloaded_to = str(tmp_path / "downloaded")
+        os.makedirs(downloaded_to)
+
+        def fake_snapshot_download(repo_id, **kwargs):
+            assert repo_id == "my-org/custom-gemma3"
+            return downloaded_to
+
+        monkeypatch.setattr("huggingface_hub.snapshot_download", fake_snapshot_download)
+
+        cfg = _FakeODConfig(
+            model=str(tmp_path),
+            custom_pipeline_args={"text_encoder_model": "my-org/custom-gemma3"},
+        )
+        result = _get_text_encoder_path(cfg)
+        assert result == downloaded_to
+
+    def test_hf_id_in_text_encoder_path_triggers_download(self, tmp_path, monkeypatch):
+        """A non-local text_encoder_path is used as the repo to download from."""
+        downloaded_to = str(tmp_path / "downloaded")
+        os.makedirs(downloaded_to)
+
+        def fake_snapshot_download(repo_id, **kwargs):
+            assert repo_id == "google/gemma-3-12b"
+            return downloaded_to
+
+        monkeypatch.setattr("huggingface_hub.snapshot_download", fake_snapshot_download)
+
+        cfg = _FakeODConfig(
+            model=str(tmp_path),
+            custom_pipeline_args={"text_encoder_path": "google/gemma-3-12b"},
+        )
+        result = _get_text_encoder_path(cfg)
+        assert result == downloaded_to
+
+    def test_none_custom_args_triggers_auto_download(self, tmp_path, monkeypatch):
+        downloaded_to = str(tmp_path / "downloaded")
+        os.makedirs(downloaded_to)
+
+        def fake_snapshot_download(repo_id, **kwargs):
+            assert repo_id == _DEFAULT_TEXT_ENCODER_REPO
+            return downloaded_to
+
+        monkeypatch.setattr("huggingface_hub.snapshot_download", fake_snapshot_download)
+
         cfg = _FakeODConfig(model=str(tmp_path), custom_pipeline_args=None)
-        assert _get_text_encoder_path(cfg) is None
+        result = _get_text_encoder_path(cfg)
+        assert result == downloaded_to
+
+    def test_default_text_encoder_repo_value(self):
+        assert _DEFAULT_TEXT_ENCODER_REPO == "Lightricks/LTX-2"
 
 
 # ---------------------------------------------------------------------------

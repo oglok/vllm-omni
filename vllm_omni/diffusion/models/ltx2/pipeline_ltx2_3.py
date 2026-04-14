@@ -19,10 +19,20 @@ Key differences from LTX-2 (19B):
 
 Usage::
 
+    # Zero-config: text encoder auto-downloaded from Lightricks/LTX-2
+    vllm serve Lightricks/LTX-2.3 --omni --model-class-name LTX23Pipeline
+
+    # Or with explicit text encoder path
     vllm serve Lightricks/LTX-2.3 \\
         --omni \\
         --model-class-name LTX23Pipeline \\
         --custom-pipeline-args '{"text_encoder_path": "/path/to/gemma-3"}'
+
+    # Or override the text encoder HuggingFace repo
+    vllm serve Lightricks/LTX-2.3 \\
+        --omni \\
+        --model-class-name LTX23Pipeline \\
+        --custom-pipeline-args '{"text_encoder_model": "my-org/custom-gemma3"}'
 """
 
 from __future__ import annotations
@@ -70,6 +80,13 @@ _RAW_VAE_PREFIX = "vae."
 _RAW_AUDIO_VAE_PREFIX = "audio_vae."
 _RAW_VOCODER_PREFIX = "vocoder."
 _RAW_CONNECTORS_PREFIX = "embeddings_proj."
+
+# Default HuggingFace repo for the text encoder.  LTX-2.3 uses the same
+# Gemma-3 text encoder as LTX-2, but the LTX-2.3 repo ships only the
+# raw safetensors (no diffusers subdirectories).  When the user does not
+# provide an explicit text_encoder_path we fall back to downloading the
+# text_encoder/ and tokenizer/ subfolders from this repo automatically.
+_DEFAULT_TEXT_ENCODER_REPO = "Lightricks/LTX-2"
 
 
 def _load_safetensors_metadata(model_path: str) -> dict:
@@ -153,31 +170,59 @@ def _load_component_weights_from_safetensors(
     return state_dict
 
 
-def _get_text_encoder_path(od_config: OmniDiffusionConfig) -> str | None:
-    """Resolve the text encoder path from configuration.
+def _get_text_encoder_path(od_config: OmniDiffusionConfig) -> str:
+    """Resolve the text encoder path, downloading automatically if needed.
 
-    Checks (in order):
-    1. ``custom_pipeline_args["text_encoder_path"]``
-    2. ``text_encoder/`` subdirectory inside the model path
-    3. ``tokenizer/`` subdirectory inside the model path (for tokenizer-only)
+    Resolution order:
+
+    1. ``custom_pipeline_args["text_encoder_path"]`` – explicit local path
+       or HuggingFace model ID provided by the user.
+    2. ``custom_pipeline_args["text_encoder_model"]`` – HuggingFace repo to
+       download the text encoder from (defaults to
+       :data:`_DEFAULT_TEXT_ENCODER_REPO`).
+    3. ``text_encoder/`` subdirectory inside the model path.
+    4. Auto-download from :data:`_DEFAULT_TEXT_ENCODER_REPO`.
 
     Returns:
-        Path to the text encoder, or None if not found.
+        Local path to a directory containing ``text_encoder/`` and
+        ``tokenizer/`` subdirectories.
     """
-    # Check custom_pipeline_args
     custom_args = getattr(od_config, "custom_pipeline_args", None) or {}
+
+    # 1. Explicit local path
     text_encoder_path = custom_args.get("text_encoder_path")
     if text_encoder_path and os.path.exists(text_encoder_path):
         return text_encoder_path
 
-    # Check for text_encoder subdirectory in model path
+    # 2. text_encoder/ already present inside the model directory
     model = od_config.model
     if os.path.isdir(model):
         te_path = os.path.join(model, "text_encoder")
         if os.path.exists(te_path):
-            return model  # Parent path with text_encoder/ subfolder
+            return model
 
-    return text_encoder_path  # May be a HuggingFace model ID
+    # 3. Explicit HF repo ID (non-local path in text_encoder_path, or
+    #    the separate text_encoder_model key)
+    te_repo = (
+        custom_args.get("text_encoder_model")
+        or text_encoder_path  # may be an HF ID like "google/gemma-3-12b"
+        or _DEFAULT_TEXT_ENCODER_REPO
+    )
+
+    # 4. Download text_encoder/ and tokenizer/ from the resolved repo
+    logger.info(
+        "LTX-2.3: downloading text encoder from %s "
+        "(override with --custom-pipeline-args "
+        '\'{"text_encoder_model": "your/repo"}\')',
+        te_repo,
+    )
+    from huggingface_hub import snapshot_download
+
+    local_dir = snapshot_download(
+        te_repo,
+        allow_patterns=["text_encoder/*", "tokenizer/*"],
+    )
+    return local_dir
 
 
 class LTX23Pipeline(nn.Module, CFGParallelMixin, ProgressBarMixin):
@@ -236,12 +281,8 @@ class LTX23Pipeline(nn.Module, CFGParallelMixin, ProgressBarMixin):
         ]
 
         # --- Text encoder and tokenizer (from separate path) ---
+        # Auto-downloads from Lightricks/LTX-2 if no explicit path is given.
         text_encoder_path = _get_text_encoder_path(od_config)
-        if text_encoder_path is None:
-            raise ValueError(
-                "LTX-2.3 requires a text encoder path. Specify it via "
-                '--custom-pipeline-args \'{"text_encoder_path": "/path/to/gemma-3"}\''
-            )
         te_local = os.path.exists(text_encoder_path)
 
         # Determine if text encoder is in a subfolder or standalone
