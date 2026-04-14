@@ -700,6 +700,10 @@ class LTX2VideoTransformerBlock(nn.Module):
         audio_num_attention_heads: int,
         audio_attention_head_dim,
         audio_cross_attention_dim: int,
+        video_gated_attn: bool = False,
+        video_cross_attn_adaln: bool = False,
+        audio_gated_attn: bool = False,
+        audio_cross_attn_adaln: bool = False,
         qk_norm: str = "rms_norm_across_heads",
         activation_fn: str = "gelu-approximate",
         attention_bias: bool = True,
@@ -707,8 +711,12 @@ class LTX2VideoTransformerBlock(nn.Module):
         eps: float = 1e-6,
         elementwise_affine: bool = False,
         rope_type: str = "interleaved",
+        perturbed_attn: bool = False,
     ):
         super().__init__()
+        self.video_cross_attn_adaln = video_cross_attn_adaln
+        self.audio_cross_attn_adaln = audio_cross_attn_adaln
+        self.perturbed_attn = perturbed_attn
 
         # 1. Self-Attention (video and audio)
         self.norm1 = _make_rms_norm(dim, eps=eps, elementwise_affine=elementwise_affine)
@@ -802,8 +810,17 @@ class LTX2VideoTransformerBlock(nn.Module):
 
         # 5. Per-Layer Modulation Parameters
         # Self-Attention / Feedforward AdaLayerNorm-Zero mod params
-        self.scale_shift_table = nn.Parameter(torch.randn(6, dim) / dim**0.5)
-        self.audio_scale_shift_table = nn.Parameter(torch.randn(6, audio_dim) / audio_dim**0.5)
+        # LTX-2.3 with cross_attn_adaln uses 9 params (extra 3 for cross-attn modulation);
+        # LTX-2 uses 6.
+        video_mod_param_num = 9 if self.video_cross_attn_adaln else 6
+        audio_mod_param_num = 9 if self.audio_cross_attn_adaln else 6
+        self.scale_shift_table = nn.Parameter(torch.randn(video_mod_param_num, dim) / dim**0.5)
+        self.audio_scale_shift_table = nn.Parameter(torch.randn(audio_mod_param_num, audio_dim) / audio_dim**0.5)
+
+        # LTX-2.3: Prompt modulation tables (for STG / perturbed attention)
+        if perturbed_attn:
+            self.prompt_scale_shift_table = nn.Parameter(torch.randn(2, dim))
+            self.audio_prompt_scale_shift_table = nn.Parameter(torch.randn(2, audio_dim))
 
         # Per-layer a2v, v2a Cross-Attention mod params
         self.video_a2v_cross_attn_scale_shift_table = nn.Parameter(torch.randn(5, dim))
@@ -1351,8 +1368,15 @@ class LTX2VideoTransformer3DModel(nn.Module):
         timestep_scale_multiplier: int = 1000,
         cross_attn_timestep_scale_multiplier: int = 1000,
         rope_type: str = "interleaved",
+        use_prompt_embeddings: bool = True,
+        perturbed_attn: bool = False,
+        gated_attn: bool = False,
+        cross_attn_mod: bool = False,
+        audio_gated_attn: bool = False,
+        audio_cross_attn_mod: bool = False,
     ) -> None:
         super().__init__()
+        self.perturbed_attn = perturbed_attn
 
         out_channels = out_channels or in_channels
         audio_out_channels = audio_out_channels or audio_in_channels
@@ -1437,7 +1461,13 @@ class LTX2VideoTransformer3DModel(nn.Module):
             audio_inner_dim, num_mod_params=1, use_additional_conditions=False
         )
 
-        # 3.3. Output Layer Scale/Shift Modulation parameters
+        # 3.3. LTX-2.3: Audio prompt timestep embedding (for STG / perturbed attention)
+        if perturbed_attn:
+            self.audio_prompt_adaln = LTX2AdaLayerNormSingle(
+                audio_inner_dim, num_mod_params=2, use_additional_conditions=False
+            )
+
+        # 3.4. Output Layer Scale/Shift Modulation parameters
         self.scale_shift_table = nn.Parameter(torch.randn(2, inner_dim) / inner_dim**0.5)
         self.audio_scale_shift_table = nn.Parameter(torch.randn(2, audio_inner_dim) / audio_inner_dim**0.5)
 
@@ -1517,6 +1547,10 @@ class LTX2VideoTransformer3DModel(nn.Module):
                     audio_num_attention_heads=audio_num_attention_heads,
                     audio_attention_head_dim=audio_attention_head_dim,
                     audio_cross_attention_dim=audio_cross_attention_dim,
+                    video_gated_attn=gated_attn,
+                    video_cross_attn_adaln=cross_attn_mod,
+                    audio_gated_attn=audio_gated_attn,
+                    audio_cross_attn_adaln=audio_cross_attn_mod,
                     qk_norm=qk_norm,
                     activation_fn=activation_fn,
                     attention_bias=attention_bias,
@@ -1524,6 +1558,7 @@ class LTX2VideoTransformer3DModel(nn.Module):
                     eps=norm_eps,
                     elementwise_affine=norm_elementwise_affine,
                     rope_type=rope_type,
+                    perturbed_attn=perturbed_attn,
                 )
                 for _ in range(num_layers)
             ]
