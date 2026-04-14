@@ -503,8 +503,12 @@ class LTX2Attention(torch.nn.Module):
         processor=None,
     ):
         super().__init__()
-        if qk_norm != "rms_norm_across_heads":
-            raise NotImplementedError("Only 'rms_norm_across_heads' is supported as a valid value for `qk_norm`.")
+        # LTX-2 uses "rms_norm_across_heads", LTX-2.3 uses "rms_norm" — both
+        # map to the same RMSNorm implementation applied across Q/K heads.
+        if qk_norm not in ("rms_norm_across_heads", "rms_norm"):
+            raise NotImplementedError(
+                f"Only 'rms_norm_across_heads' and 'rms_norm' are supported for `qk_norm`, got {qk_norm!r}."
+            )
 
         kv_heads = heads if kv_heads is None else kv_heads
 
