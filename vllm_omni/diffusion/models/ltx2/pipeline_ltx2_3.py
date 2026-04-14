@@ -117,14 +117,26 @@ def _load_safetensors_metadata(model_path: str) -> dict:
 def _resolve_safetensors_path(model_path: str) -> str | None:
     """Resolve a model path to the primary safetensors file.
 
-    Handles both:
+    Handles:
     - Direct path to a ``.safetensors`` file
-    - Directory containing one or more safetensors files (picks the
-      ``*-dev.safetensors`` or ``*-distilled.safetensors`` variant first,
-      then falls back to the largest file)
+    - Local directory containing safetensors files
+    - HuggingFace repo ID (e.g. ``Lightricks/LTX-2.3``) -- resolved to
+      the local HF cache snapshot directory
     """
     if os.path.isfile(model_path) and model_path.endswith(".safetensors"):
         return model_path
+
+    # If it's not a local path, try resolving as a HuggingFace repo ID
+    if not os.path.exists(model_path) and "/" in model_path:
+        try:
+            from huggingface_hub import snapshot_download
+
+            local_dir = snapshot_download(model_path, allow_patterns=["*.safetensors"])
+            logger.info("Resolved HF repo %s to %s", model_path, local_dir)
+            model_path = local_dir
+        except Exception as e:
+            logger.debug("Failed to resolve %s as HF repo: %s", model_path, e)
+            return None
 
     if os.path.isdir(model_path):
         sft_files = [os.path.join(model_path, f) for f in os.listdir(model_path) if f.endswith(".safetensors")]
