@@ -88,7 +88,23 @@ class StageDiffusionProc:
         except (AttributeError, OSError, ValueError, FileNotFoundError):
             cfg = get_hf_file_to_dict("config.json", od_config.model)
             if cfg is None:
-                raise ValueError(f"Could not find config.json or model_index.json for model {od_config.model}")
+                # Raw safetensors models (e.g. Lightricks/LTX-2.3) have no
+                # config.json or model_index.json.  If --model-class-name was
+                # provided we can proceed; the pipeline __init__ will read
+                # any needed config from the safetensors metadata instead.
+                if od_config.model_class_name is not None:
+                    logger.info(
+                        "No config files found for %s; using explicit model_class_name=%s",
+                        od_config.model,
+                        od_config.model_class_name,
+                    )
+                    od_config.tf_model_config = TransformerConfig()
+                    od_config.update_multimodal_support()
+                    return
+                raise ValueError(
+                    f"Could not find config.json or model_index.json for model {od_config.model}. "
+                    f"For raw safetensors models, specify --model-class-name explicitly."
+                )
 
             od_config.tf_model_config = TransformerConfig.from_dict(cfg)
             model_type = cfg.get("model_type")
