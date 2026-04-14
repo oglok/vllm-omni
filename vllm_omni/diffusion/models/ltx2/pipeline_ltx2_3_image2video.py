@@ -60,9 +60,8 @@ class LTX23ImageToVideoPipeline(LTX23Pipeline):
             resample="bilinear",
         )
 
-    # Reuse I2V-specific methods from LTX2ImageToVideoPipeline
-    _encode_image = LTX2ImageToVideoPipeline._encode_image
-    _create_noised_state = LTX2ImageToVideoPipeline._create_noised_state
+    # Reuse I2V forward from LTX2ImageToVideoPipeline.
+    # _create_noised_state is already inherited from LTX23Pipeline -> LTX2Pipeline.
     forward = LTX2ImageToVideoPipeline.forward
 
 

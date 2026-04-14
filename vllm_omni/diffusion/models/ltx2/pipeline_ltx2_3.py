@@ -399,13 +399,14 @@ class LTX23Pipeline(nn.Module, CFGParallelMixin, ProgressBarMixin):
     # Reuse all inference methods from LTX2Pipeline
     _pack_text_embeds = LTX2Pipeline._pack_text_embeds
     _get_gemma_prompt_embeds = LTX2Pipeline._get_gemma_prompt_embeds
-    _encode_prompt = LTX2Pipeline._encode_prompt
-    _prepare_latents = LTX2Pipeline._prepare_latents
-    _prepare_audio_latents = LTX2Pipeline._prepare_audio_latents
+    encode_prompt = LTX2Pipeline.encode_prompt
+    prepare_latents = LTX2Pipeline.prepare_latents
+    prepare_audio_latents = LTX2Pipeline.prepare_audio_latents
     _pack_latents = LTX2Pipeline._pack_latents
     _unpack_latents = LTX2Pipeline._unpack_latents
     _normalize_latents = LTX2Pipeline._normalize_latents
     _denormalize_latents = LTX2Pipeline._denormalize_latents
+    _create_noised_state = LTX2Pipeline._create_noised_state
 
     @property
     def guidance_scale(self):
