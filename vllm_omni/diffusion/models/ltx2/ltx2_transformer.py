@@ -856,7 +856,8 @@ class LTX2VideoTransformerBlock(nn.Module):
         ada_values = self.scale_shift_table[None, None].to(temb.device) + temb.reshape(
             batch_size, temb.size(1), num_ada_params, -1
         )
-        shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = ada_values.unbind(dim=2)
+        all_ada_values = ada_values.unbind(dim=2)
+        shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = all_ada_values[:6]
         norm_hidden_states = norm_hidden_states * (1 + scale_msa) + shift_msa
 
         attn_hidden_states = self.attn1(
@@ -872,8 +873,9 @@ class LTX2VideoTransformerBlock(nn.Module):
         audio_ada_values = self.audio_scale_shift_table[None, None].to(temb_audio.device) + temb_audio.reshape(
             batch_size, temb_audio.size(1), num_audio_ada_params, -1
         )
+        all_audio_ada_values = audio_ada_values.unbind(dim=2)
         audio_shift_msa, audio_scale_msa, audio_gate_msa, audio_shift_mlp, audio_scale_mlp, audio_gate_mlp = (
-            audio_ada_values.unbind(dim=2)
+            all_audio_ada_values[:6]
         )
         norm_audio_hidden_states = norm_audio_hidden_states * (1 + audio_scale_msa) + audio_shift_msa
 
