@@ -66,6 +66,7 @@ from vllm_omni.lora.request import LoRARequest
 from .pipeline_ltx2 import (
     LTX2Pipeline,
     create_transformer_from_config,
+    get_ltx2_post_process_func,  # noqa: F401 - loaded by registry via getattr
 )
 from .pipeline_ltx2_latent_upsample import LTX2LatentUpsamplePipeline
 
