@@ -1827,6 +1827,12 @@ class LTX2VideoTransformer3DModel(nn.Module):
                 weight_loader(param, loaded_weight, shard_id)
                 break
             else:
+                if name not in params_dict:
+                    # LTX-2.3 has additional parameters (e.g.
+                    # audio_prompt_scale_shift_table, audio_prompt_adaln)
+                    # that are not present in the current transformer.
+                    # Skip them gracefully instead of crashing.
+                    continue
                 param = params_dict[name]
                 weight_loader = getattr(param, "weight_loader", None)
                 if weight_loader is not None:
