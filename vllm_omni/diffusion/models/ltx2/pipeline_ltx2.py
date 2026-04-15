@@ -89,22 +89,44 @@ def create_transformer_from_config(config: dict) -> LTX2VideoTransformer3DModel:
     return LTX2VideoTransformer3DModel(**kwargs)
 
 
+def _detect_vocoder_output_sample_rate(model: str) -> int | None:
+    """Detect the vocoder output sample rate from the model config.
+
+    LTX-2.3 with VocoderWithBWE outputs at 48kHz (upsampled from 16kHz).
+    LTX-2 with LTX2Vocoder outputs at the audio_vae sample rate (16kHz).
+    """
+    try:
+        import json
+
+        from huggingface_hub import hf_hub_download
+
+        # Try local path first
+        vocoder_config_path = os.path.join(model, "vocoder", "config.json")
+        if not os.path.exists(vocoder_config_path):
+            vocoder_config_path = hf_hub_download(model, "vocoder/config.json")
+
+        with open(vocoder_config_path) as f:
+            cfg = json.load(f)
+        return cfg.get("output_sampling_rate")
+    except Exception:
+        return None
+
+
 def get_ltx2_post_process_func(
     od_config: OmniDiffusionConfig,
 ):
+    # Detect the actual output sample rate at factory time.
+    # This runs in the engine process, before the worker process starts.
+    output_sr = _detect_vocoder_output_sample_rate(od_config.model)
+
     def post_process_func(output: tuple[torch.Tensor, torch.Tensor] | torch.Tensor):
         if isinstance(output, tuple) and len(output) == 2:
             video, audio = output
             if isinstance(audio, torch.Tensor):
                 audio = audio.detach().cpu()
             result: dict = {"video": video, "audio": audio}
-            # Include the actual output sample rate from od_config so the
-            # video encoder uses the correct rate. This is critical for
-            # LTX-2.3 where the BWE vocoder outputs at 48kHz, not the
-            # audio_vae's 16kHz.
-            audio_sr = getattr(od_config, "_output_audio_sample_rate", None)
-            if audio_sr is not None:
-                result["audio_sample_rate"] = audio_sr
+            if output_sr is not None:
+                result["audio_sample_rate"] = output_sr
             return result
         return output
 
