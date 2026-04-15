@@ -44,7 +44,13 @@ from vllm_omni.diffusion.models.progress_bar import ProgressBarMixin
 from vllm_omni.diffusion.request import OmniDiffusionRequest
 from vllm_omni.lora.request import LoRARequest
 
-from .ltx2_transformer import LTX2VideoTransformer3DModel
+try:
+    # Prefer diffusers' transformer which has full LTX-2.3 forward pass support
+    # (cross-attn adaln, prompt modulation, perturbed attention / STG).
+    # The vllm-omni fork has TP/SP optimizations but lacks the LTX-2.3 forward logic.
+    from diffusers.models.transformers.transformer_ltx2 import LTX2VideoTransformer3DModel
+except ImportError:
+    from .ltx2_transformer import LTX2VideoTransformer3DModel
 from .pipeline_ltx2_latent_upsample import LTX2LatentUpsamplePipeline
 
 logger = init_logger(__name__)
