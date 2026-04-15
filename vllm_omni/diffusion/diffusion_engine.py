@@ -145,8 +145,10 @@ class DiffusionEngine:
         postprocess_start_time = time.perf_counter()
         outputs = self.post_process_func(output_data) if self.post_process_func is not None else output_data
         audio_payload = None
+        audio_sample_rate = None
         if isinstance(outputs, dict):
             audio_payload = outputs.get("audio")
+            audio_sample_rate = outputs.get("audio_sample_rate")
             outputs = outputs.get("video", outputs)
         postprocess_time = time.perf_counter() - postprocess_start_time
         logger.info(f"Post-processing completed in {postprocess_time:.4f} seconds")
@@ -202,6 +204,8 @@ class DiffusionEngine:
                 mm_output = {}
                 if audio_payload is not None:
                     mm_output["audio"] = audio_payload
+                if audio_sample_rate is not None:
+                    mm_output["audio_sample_rate"] = audio_sample_rate
                 return [
                     OmniRequestOutput.from_diffusion(
                         request_id=request_id,
