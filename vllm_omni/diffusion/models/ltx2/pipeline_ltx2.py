@@ -97,7 +97,15 @@ def get_ltx2_post_process_func(
             video, audio = output
             if isinstance(audio, torch.Tensor):
                 audio = audio.detach().cpu()
-            return {"video": video, "audio": audio}
+            result: dict = {"video": video, "audio": audio}
+            # Include the actual output sample rate from od_config so the
+            # video encoder uses the correct rate. This is critical for
+            # LTX-2.3 where the BWE vocoder outputs at 48kHz, not the
+            # audio_vae's 16kHz.
+            audio_sr = getattr(od_config, "_output_audio_sample_rate", None)
+            if audio_sr is not None:
+                result["audio_sample_rate"] = audio_sr
+            return result
         return output
 
     return post_process_func
@@ -245,6 +253,15 @@ class LTX2Pipeline(nn.Module, CFGParallelMixin, ProgressBarMixin):
         self.audio_hop_length = (
             self.audio_vae.config.mel_hop_length if getattr(self, "audio_vae", None) is not None else 160
         )
+
+        # Determine actual output audio sample rate.
+        # LTX-2 (LTX2Vocoder): outputs at audio_vae sample_rate (16kHz)
+        # LTX-2.3 (LTX2VocoderWithBWE): upsamples to output_sampling_rate (48kHz)
+        vocoder_config = getattr(self.vocoder, "config", None)
+        output_sr = getattr(vocoder_config, "output_sampling_rate", None)
+        self._output_audio_sample_rate = output_sr or self.audio_sampling_rate
+        # Store on od_config so post_process_func can access it
+        od_config._output_audio_sample_rate = self._output_audio_sample_rate
 
         self.video_processor = VideoProcessor(vae_scale_factor=self.vae_spatial_compression_ratio)
         tokenizer_max_length = 1024
