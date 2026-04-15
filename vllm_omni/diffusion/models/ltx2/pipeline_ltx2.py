@@ -172,20 +172,21 @@ class LTX2Pipeline(nn.Module, CFGParallelMixin, ProgressBarMixin):
             subfolder="connectors",
             torch_dtype=dtype,
             local_files_only=local_files_only,
-        ).to(self.device)
+        )
+        self.connectors_on_device = False
 
         self.vae = AutoencoderKLLTX2Video.from_pretrained(
             model,
             subfolder="vae",
             torch_dtype=dtype,
             local_files_only=local_files_only,
-        ).to(self.device)
+        )
         self.audio_vae = AutoencoderKLLTX2Audio.from_pretrained(
             model,
             subfolder="audio_vae",
             torch_dtype=dtype,
             local_files_only=local_files_only,
-        ).to(self.device)
+        )
         # LTX-2 uses LTX2Vocoder, LTX-2.3 uses LTX2VocoderWithBWE (bandwidth
         # extension for 48kHz audio).  Try the BWE variant first, then fall
         # back to the standard vocoder for older models / diffusers versions.
@@ -196,7 +197,7 @@ class LTX2Pipeline(nn.Module, CFGParallelMixin, ProgressBarMixin):
                 subfolder="vocoder",
                 torch_dtype=dtype,
                 local_files_only=local_files_only,
-            ).to(self.device)
+            )
         except (TypeError, OSError, ValueError):
             # Fall back if BWE vocoder fails (e.g. LTX-2 model with old config)
             self.vocoder = LTX2Vocoder.from_pretrained(
@@ -204,7 +205,7 @@ class LTX2Pipeline(nn.Module, CFGParallelMixin, ProgressBarMixin):
                 subfolder="vocoder",
                 torch_dtype=dtype,
                 local_files_only=local_files_only,
-            ).to(self.device)
+            )
 
         transformer_config = load_transformer_config(model, "transformer", local_files_only)
         self.transformer = create_transformer_from_config(transformer_config)
@@ -967,6 +968,10 @@ class LTX2Pipeline(nn.Module, CFGParallelMixin, ProgressBarMixin):
             prompt_attention_mask = torch.cat([negative_prompt_attention_mask, prompt_attention_mask], dim=0)
 
         additive_attention_mask = (1 - prompt_attention_mask.to(prompt_embeds.dtype)) * -1000000.0
+        # Move connectors to GPU for encoding, keep on GPU (small relative to transformer)
+        if not self.connectors_on_device:
+            self.connectors.to(device)
+            self.connectors_on_device = True
         connector_prompt_embeds, connector_audio_prompt_embeds, connector_attention_mask = self.connectors(
             prompt_embeds, additive_attention_mask
         )
@@ -1274,6 +1279,11 @@ class LTX2Pipeline(nn.Module, CFGParallelMixin, ProgressBarMixin):
                 ]
                 latents = (1 - decode_noise_scale) * latents + decode_noise_scale * noise
 
+            # Move decode components to GPU (kept on CPU to save VRAM during denoising)
+            self.vae.to(device)
+            self.audio_vae.to(device)
+            self.vocoder.to(device)
+
             latents = latents.to(self.vae.dtype)
             video = self.vae.decode(latents, timestep, return_dict=False)[0]
             video = self.video_processor.postprocess_video(video, output_type=output_type)
@@ -1281,6 +1291,12 @@ class LTX2Pipeline(nn.Module, CFGParallelMixin, ProgressBarMixin):
             audio_latents = audio_latents.to(self.audio_vae.dtype)
             generated_mel_spectrograms = self.audio_vae.decode(audio_latents, return_dict=False)[0]
             audio = self.vocoder(generated_mel_spectrograms)
+
+            # Move decode components back to CPU
+            self.vae.to("cpu")
+            self.audio_vae.to("cpu")
+            self.vocoder.to("cpu")
+            torch.cuda.empty_cache()
 
         if not return_dict:
             return DiffusionOutput(output=(video, audio))
