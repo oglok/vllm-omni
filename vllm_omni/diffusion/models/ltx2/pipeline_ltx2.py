@@ -158,15 +158,15 @@ class LTX2Pipeline(nn.Module, CFGParallelMixin, ProgressBarMixin):
             subfolder="tokenizer",
             local_files_only=local_files_only,
         )
-        # prefer mmap loading as default device is cuda, and the output of text encoder
-        # could be deterministic.
+        # Keep the text encoder on CPU to save GPU memory (~24GB for Gemma-3-12B).
+        # It is moved to GPU temporarily during encode_prompt and back to CPU after.
         with torch.device("cpu"):
             self.text_encoder = Gemma3ForConditionalGeneration.from_pretrained(
                 model,
                 subfolder="text_encoder",
                 torch_dtype=dtype,
                 local_files_only=local_files_only,
-            ).to(self.device)
+            )
         self.connectors = LTX2TextConnectors.from_pretrained(
             model,
             subfolder="connectors",
@@ -330,10 +330,14 @@ class LTX2Pipeline(nn.Module, CFGParallelMixin, ProgressBarMixin):
         text_input_ids = text_input_ids.to(device)
         prompt_attention_mask = prompt_attention_mask.to(device)
 
+        # Move text encoder to GPU for inference, then back to CPU to free VRAM
+        self.text_encoder.to(device)
         text_encoder_outputs = self.text_encoder(
             input_ids=text_input_ids, attention_mask=prompt_attention_mask, output_hidden_states=True
         )
         text_encoder_hidden_states = text_encoder_outputs.hidden_states
+        self.text_encoder.to("cpu")
+        torch.cuda.empty_cache()
         text_encoder_hidden_states = torch.stack(text_encoder_hidden_states, dim=-1)
         sequence_lengths = prompt_attention_mask.sum(dim=-1)
 
