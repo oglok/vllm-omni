@@ -973,29 +973,32 @@ class LTX2Pipeline(nn.Module, CFGParallelMixin, ProgressBarMixin):
             prompt_embeds = torch.cat([negative_prompt_embeds, prompt_embeds], dim=0)
             prompt_attention_mask = torch.cat([negative_prompt_attention_mask, prompt_attention_mask], dim=0)
 
-        additive_attention_mask = (1 - prompt_attention_mask.to(prompt_embeds.dtype)) * -1000000.0
+        # Resolve tokenizer padding side (diffusers connectors need this for
+        # correct attention mask handling in LTX-2.3)
+        tokenizer_padding_side = "left"
+        if getattr(self, "tokenizer", None) is not None:
+            tokenizer_padding_side = getattr(self.tokenizer, "padding_side", "left")
+
         # Move connectors to GPU for encoding, keep on GPU (small relative to transformer)
         if not self.connectors_on_device:
             self.connectors.to(device)
             self.connectors_on_device = True
         connector_prompt_embeds, connector_audio_prompt_embeds, connector_attention_mask = self.connectors(
-            prompt_embeds, additive_attention_mask
+            prompt_embeds, prompt_attention_mask, padding_side=tokenizer_padding_side
         )
 
         negative_connector_prompt_embeds = None
         negative_connector_audio_prompt_embeds = None
         negative_connector_attention_mask = None
         if cfg_parallel_ready:
-            negative_additive_attention_mask = (
-                1 - negative_prompt_attention_mask.to(negative_prompt_embeds.dtype)
-            ) * -1000000.0
             (
                 negative_connector_prompt_embeds,
                 negative_connector_audio_prompt_embeds,
                 negative_connector_attention_mask,
             ) = self.connectors(
                 negative_prompt_embeds,
-                negative_additive_attention_mask,
+                negative_prompt_attention_mask,
+                padding_side=tokenizer_padding_side,
             )
 
         latent_num_frames = (num_frames - 1) // self.vae_temporal_compression_ratio + 1
