@@ -61,7 +61,7 @@ class StageDiffusionClient:
 
         # Spawn StageDiffusionProc subprocess and wait for READY.
         proc, handshake_address, request_address, response_address = spawn_diffusion_proc(model, od_config)
-        complete_diffusion_handshake(proc, handshake_address)
+        complete_diffusion_handshake(proc, handshake_address, handshake_timeout=120)
         self._proc = proc
 
         # ZMQ sockets (sync) for communicating with the subprocess.
