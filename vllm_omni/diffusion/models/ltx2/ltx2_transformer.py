@@ -435,6 +435,10 @@ class LTX2AudioVideoAttnProcessor:
             sequence_length=sequence_length,
         )
 
+        # Compute gate logits from original hidden_states (before attention)
+        if attn.to_gate_logits is not None:
+            gate_logits = attn.to_gate_logits(hidden_states)
+
         if is_self_attention:
             encoder_hidden_states = hidden_states
 
@@ -470,6 +474,13 @@ class LTX2AudioVideoAttnProcessor:
         hidden_states = hidden_states.flatten(2, 3)
         hidden_states = hidden_states.to(query.dtype)
 
+        # LTX-2.3: per-head gated attention
+        if attn.to_gate_logits is not None:
+            hidden_states = hidden_states.unflatten(2, (attn.heads, -1))  # [B, T, H, D]
+            gates = 2.0 * torch.sigmoid(gate_logits)  # [B, T, H]
+            hidden_states = hidden_states * gates.unsqueeze(-1)
+            hidden_states = hidden_states.flatten(2, 3)
+
         hidden_states = attn.to_out[0](hidden_states)
         if isinstance(hidden_states, tuple):
             hidden_states = hidden_states[0]
@@ -500,6 +511,7 @@ class LTX2Attention(torch.nn.Module):
         norm_eps: float = 1e-6,
         norm_elementwise_affine: bool = True,
         rope_type: str = "interleaved",
+        apply_gated_attention: bool = False,
         processor=None,
     ):
         super().__init__()
@@ -598,6 +610,12 @@ class LTX2Attention(torch.nn.Module):
             softmax_scale=1.0 / (dim_head**0.5),
             causal=False,
         )
+
+        # LTX-2.3: per-head gated attention
+        if apply_gated_attention:
+            self.to_gate_logits = nn.Linear(query_dim, heads, bias=True)
+        else:
+            self.to_gate_logits = None
 
         if processor is None:
             processor = self._default_processor_cls()
@@ -730,6 +748,7 @@ class LTX2VideoTransformerBlock(nn.Module):
             out_bias=attention_out_bias,
             qk_norm=qk_norm,
             rope_type=rope_type,
+            apply_gated_attention=video_gated_attn,
         )
 
         self.audio_norm1 = _make_rms_norm(audio_dim, eps=eps, elementwise_affine=elementwise_affine)
@@ -743,6 +762,7 @@ class LTX2VideoTransformerBlock(nn.Module):
             out_bias=attention_out_bias,
             qk_norm=qk_norm,
             rope_type=rope_type,
+            apply_gated_attention=audio_gated_attn,
         )
 
         # 2. Prompt Cross-Attention
@@ -757,6 +777,7 @@ class LTX2VideoTransformerBlock(nn.Module):
             out_bias=attention_out_bias,
             qk_norm=qk_norm,
             rope_type=rope_type,
+            apply_gated_attention=video_gated_attn,
         )
 
         self.audio_norm2 = _make_rms_norm(audio_dim, eps=eps, elementwise_affine=elementwise_affine)
@@ -770,6 +791,7 @@ class LTX2VideoTransformerBlock(nn.Module):
             out_bias=attention_out_bias,
             qk_norm=qk_norm,
             rope_type=rope_type,
+            apply_gated_attention=audio_gated_attn,
         )
 
         # 3. Audio-to-Video (a2v) and Video-to-Audio (v2a) Cross-Attention
@@ -785,6 +807,7 @@ class LTX2VideoTransformerBlock(nn.Module):
             out_bias=attention_out_bias,
             qk_norm=qk_norm,
             rope_type=rope_type,
+            apply_gated_attention=video_gated_attn,
         )
 
         # Video-to-Audio (v2a) Attention --> Q: Audio; K,V: Video
@@ -799,6 +822,7 @@ class LTX2VideoTransformerBlock(nn.Module):
             out_bias=attention_out_bias,
             qk_norm=qk_norm,
             rope_type=rope_type,
+            apply_gated_attention=audio_gated_attn,
         )
 
         # 4. Feedforward layers
