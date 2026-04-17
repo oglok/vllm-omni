@@ -47,7 +47,6 @@ from .pipeline_ltx2 import (
     load_transformer_config,
 )
 from .pipeline_ltx2_image2video import (
-    LTX2ImageToVideoPipeline,
     LTX2ImageToVideoTwoStagesPipeline,
 )
 
@@ -493,24 +492,24 @@ class LTX23Pipeline(LTX2Pipeline):
                         "audio_encoder_attention_mask": negative_connector_attention_mask,
                     }
 
-                noise_pred_video, noise_pred_audio = self.predict_noise_av_maybe_with_cfg(
+                noise_pred_video, noise_pred_audio = self.predict_noise_maybe_with_cfg(
                     do_true_cfg=do_true_cfg,
                     true_cfg_scale=guidance_scale,
                     positive_kwargs=positive_kwargs,
                     negative_kwargs=negative_kwargs,
-                    guidance_rescale=guidance_rescale,
                     cfg_normalize=False,
                 )
 
-                latents, audio_latents = self._scheduler_step_video_audio_maybe_with_cfg(
-                    noise_pred_video,
-                    noise_pred_audio,
-                    t,
-                    latents,
-                    audio_latents,
-                    video_audio_scheduler,
+                latents, audio_latents = self.scheduler_step_maybe_with_cfg(
+                    (noise_pred_video, noise_pred_audio),
+                    (t, t),
+                    (latents, audio_latents),
                     do_true_cfg=do_true_cfg,
-                    generator=generator,
+                    per_request_scheduler=video_audio_scheduler,
+                )
+                latents, audio_latents = self._synchronize_cfg_parallel_step_output(
+                    (latents, audio_latents),
+                    do_true_cfg=do_true_cfg,
                 )
                 pbar.update()
 
@@ -615,8 +614,16 @@ class LTX23TwoStagesPipeline(LTX2TwoStagesPipeline):
 class LTX23ImageToVideoPipeline(LTX23Pipeline):
     """LTX-2.3 image-to-video pipeline.
 
-    Inherits LTX-2.3 overrides (CPU offload, BWE vocoder, diffusers transformer)
-    and adds image conditioning from :class:`LTX2ImageToVideoPipeline`.
+    Inherits LTX-2.3 overrides (CPU offload, BWE vocoder, diffusers transformer,
+    padding_side connectors).  Uses T2V forward from :class:`LTX23Pipeline`.
+
+    .. note::
+        Image conditioning (encoding a reference image into the initial latents)
+        requires a dedicated ``forward()`` override that is not yet implemented.
+        Currently this pipeline generates video from text only, like
+        :class:`LTX23Pipeline`.  A proper I2V forward should be added by
+        porting the image encoding logic from :class:`LTX2ImageToVideoPipeline`
+        with the LTX-2.3 connector API.
     """
 
     support_image_input = True
@@ -626,8 +633,6 @@ class LTX23ImageToVideoPipeline(LTX23Pipeline):
         from diffusers.video_processor import VideoProcessor
 
         self.video_processor = VideoProcessor(vae_scale_factor=self.vae_spatial_compression_ratio, resample="bilinear")
-
-    forward = LTX2ImageToVideoPipeline.forward
 
 
 class LTX23ImageToVideoTwoStagesPipeline(LTX2ImageToVideoTwoStagesPipeline):
