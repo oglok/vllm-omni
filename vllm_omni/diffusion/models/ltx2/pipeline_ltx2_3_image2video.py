@@ -1,33 +1,20 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Copyright contributors to the vLLM project
 
-"""LTX-2.3 image-to-video pipeline aliases.
+"""LTX-2.3 image-to-video re-exports.
 
-See :mod:`pipeline_ltx2_3` for details on the alias approach.
+All I2V classes are defined in :mod:`pipeline_ltx2_3`.
+This module re-exports them for registry compatibility.
 """
 
-from .pipeline_ltx2 import (
+from .pipeline_ltx2_3 import (
+    LTX23ImageToVideoPipeline,
+    LTX23ImageToVideoTwoStagesPipeline,
     get_ltx2_post_process_func,  # noqa: F401 - loaded by registry via getattr
 )
-from .pipeline_ltx2_image2video import (
-    LTX2ImageToVideoPipeline,
-    LTX2ImageToVideoTwoStagesPipeline,
-)
 
-
-class LTX23ImageToVideoPipeline(LTX2ImageToVideoPipeline):
-    """LTX-2.3 image-to-video pipeline.
-
-    Identical to :class:`LTX2ImageToVideoPipeline`.
-    """
-
-    pass
-
-
-class LTX23ImageToVideoTwoStagesPipeline(LTX2ImageToVideoTwoStagesPipeline):
-    """LTX-2.3 two-stage image-to-video pipeline.
-
-    Identical to :class:`LTX2ImageToVideoTwoStagesPipeline`.
-    """
-
-    pass
+__all__ = [
+    "LTX23ImageToVideoPipeline",
+    "LTX23ImageToVideoTwoStagesPipeline",
+    "get_ltx2_post_process_func",
+]
