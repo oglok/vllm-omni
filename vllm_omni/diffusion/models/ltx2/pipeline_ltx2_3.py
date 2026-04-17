@@ -362,6 +362,11 @@ class LTX23Pipeline(LTX2Pipeline):
             max_sequence_length=max_sequence_length,
             device=device,
         )
+        logger.info(
+            "LTX23 after encode_prompt: embeds=%s mask=%s",
+            prompt_embeds.shape,
+            prompt_attention_mask.shape if prompt_attention_mask is not None else "None",
+        )
 
         # --- Connectors: padding_side API (diffusers 0.38.0+) ---
         tokenizer_padding_side = "left"
