@@ -47,11 +47,7 @@ try:
 except ImportError:
     LTX2VocoderWithBWE = None
 
-# Diffusers transformer (full LTX-2.3 forward pass)
-try:
-    from diffusers.models.transformers.transformer_ltx2 import LTX2VideoTransformer3DModel
-except ImportError:
-    from .ltx2_transformer import LTX2VideoTransformer3DModel
+# Custom transformer with TP/SP support and LTX-2.3 forward pass
 
 logger = init_logger(__name__)
 
@@ -162,12 +158,11 @@ class LTX23Pipeline(nn.Module, ProgressBarMixin):
                 model, subfolder="vocoder", torch_dtype=dtype, local_files_only=local_files_only
             )
 
-        # --- Transformer: diffusers version (full LTX-2.3 forward) ---
-        from .pipeline_ltx2 import load_transformer_config
+        # --- Transformer: custom vllm-omni version with TP/SP + LTX-2.3 forward ---
+        from .pipeline_ltx2 import create_transformer_from_config, load_transformer_config
 
         transformer_config = load_transformer_config(model, "transformer", local_files_only)
-        kwargs = {k: v for k, v in transformer_config.items() if k != "_class_name"}
-        self.transformer = LTX2VideoTransformer3DModel(**kwargs)
+        self.transformer = create_transformer_from_config(transformer_config)
 
         # --- Scheduler ---
         self.scheduler = FlowMatchEulerDiscreteScheduler.from_pretrained(
