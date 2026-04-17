@@ -47,7 +47,16 @@ try:
 except ImportError:
     LTX2VocoderWithBWE = None
 
-# Custom transformer with TP/SP support and LTX-2.3 forward pass
+# Prefer diffusers transformer which has gated attention, split RoPE, and the
+# full LTX-2.3 forward pass. The custom vllm-omni transformer has TP/SP but
+# lacks gated attention (to_gate_logits) which LTX-2.3 requires.
+# TODO: add gated attention to custom transformer, then switch back.
+try:
+    from diffusers.models.transformers.transformer_ltx2 import (
+        LTX2VideoTransformer3DModel as DiffusersLTX2Transformer,
+    )
+except ImportError:
+    DiffusersLTX2Transformer = None
 
 logger = init_logger(__name__)
 
@@ -158,11 +167,17 @@ class LTX23Pipeline(nn.Module, ProgressBarMixin):
                 model, subfolder="vocoder", torch_dtype=dtype, local_files_only=local_files_only
             )
 
-        # --- Transformer: custom vllm-omni version with TP/SP + LTX-2.3 forward ---
-        from .pipeline_ltx2 import create_transformer_from_config, load_transformer_config
+        # --- Transformer: diffusers version with gated attention + split RoPE ---
+        from .pipeline_ltx2 import load_transformer_config
 
         transformer_config = load_transformer_config(model, "transformer", local_files_only)
-        self.transformer = create_transformer_from_config(transformer_config)
+        if DiffusersLTX2Transformer is not None:
+            kwargs = {k: v for k, v in transformer_config.items() if k != "_class_name"}
+            self.transformer = DiffusersLTX2Transformer(**kwargs)
+        else:
+            from .pipeline_ltx2 import create_transformer_from_config
+
+            self.transformer = create_transformer_from_config(transformer_config)
 
         # --- Scheduler ---
         self.scheduler = FlowMatchEulerDiscreteScheduler.from_pretrained(
