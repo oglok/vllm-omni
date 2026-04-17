@@ -438,6 +438,8 @@ class LTX23Pipeline(nn.Module, ProgressBarMixin):
             audio_latents = self._pack_audio_latents(audio_latents)
 
         # --- 5. Prepare timesteps ---
+        # Ensure at least 2 steps (1 step causes scheduler index errors with flow matching)
+        num_inference_steps = max(num_inference_steps, 2)
         sigmas = np.linspace(1.0, 1 / num_inference_steps, num_inference_steps) if sigmas is None else sigmas
         video_seq_len = latent_num_frames * latent_height * latent_width
         mu = _calculate_shift(
