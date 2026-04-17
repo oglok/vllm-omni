@@ -271,18 +271,16 @@ class LTX23Pipeline(LTX2Pipeline):
         self.text_encoder.to("cpu")
         torch.cuda.empty_cache()
 
-        # Stack all hidden states into 4D: [batch, seq_len, hidden_size, num_layers]
-        # The LTX-2.3 connectors expect this 4D format and flatten internally.
-        # (per_modality_projections=True path does per_token_rms_norm on 4D,
-        # then flatten(2,3) inside the connectors forward)
+        # Stack hidden states and flatten to 3D: [batch, seq_len, hidden_size * num_layers]
+        # = [batch, 1024, 3840 * 49] = [batch, 1024, 188160]
+        # The connectors unflatten this back to 4D internally (line 26-28 of connectors.py)
         text_encoder_hidden_states = torch.stack(text_encoder_hidden_states, dim=-1)
-        prompt_embeds = text_encoder_hidden_states.to(dtype=dtype)
+        prompt_embeds = text_encoder_hidden_states.flatten(2, 3).to(dtype=dtype)
 
         # Duplicate for num_videos_per_prompt
-        # prompt_embeds is 4D: [batch, seq_len, hidden_size, num_layers]
-        seq_len = prompt_embeds.shape[1]
-        prompt_embeds = prompt_embeds.repeat(1, num_videos_per_prompt, *([1] * (prompt_embeds.ndim - 2)))
-        prompt_embeds = prompt_embeds.view(batch_size * num_videos_per_prompt, seq_len, *prompt_embeds.shape[2:])
+        _, seq_len, _ = prompt_embeds.shape
+        prompt_embeds = prompt_embeds.repeat(1, num_videos_per_prompt, 1)
+        prompt_embeds = prompt_embeds.view(batch_size * num_videos_per_prompt, seq_len, -1)
 
         prompt_attention_mask = prompt_attention_mask.view(batch_size, -1)
         prompt_attention_mask = prompt_attention_mask.repeat(num_videos_per_prompt, 1)
