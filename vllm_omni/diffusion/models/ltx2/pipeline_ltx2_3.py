@@ -394,14 +394,13 @@ class LTX23Pipeline(nn.Module, ProgressBarMixin):
             prompt_embeds = torch.cat([neg_embeds, prompt_embeds], dim=0)
             prompt_mask = torch.cat([neg_mask, prompt_mask], dim=0)
 
-        additive_mask = (1 - prompt_mask.to(prompt_embeds.dtype)) * -1000000.0
-
         if not self._connectors_on_device:
             self.connectors.to(device)
             self._connectors_on_device = True
 
+        tokenizer_padding_side = getattr(self.tokenizer, "padding_side", "left")
         connector_video, connector_audio, connector_mask = self.connectors(
-            prompt_embeds, additive_mask, additive_mask=True
+            prompt_embeds, prompt_mask, padding_side=tokenizer_padding_side
         )
 
         # --- 3. Prepare video latents ---
