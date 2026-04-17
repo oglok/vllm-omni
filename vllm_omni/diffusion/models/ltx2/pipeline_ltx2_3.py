@@ -418,10 +418,10 @@ class LTX23Pipeline(LTX2Pipeline):
         audio_channels = getattr(self.transformer.config, "audio_in_channels", 64)
 
         audio_latents, original_audio_num_frames, padded_audio_num_frames = self.prepare_audio_latents(
-            batch_size * num_videos_per_prompt,
-            audio_channels,
-            num_mel_bins,
+            batch_size=batch_size * num_videos_per_prompt,
+            num_channels_latents=audio_channels,
             audio_latent_length=audio_num_frames,
+            num_mel_bins=num_mel_bins,
             noise_scale=noise_scale,
             dtype=torch.float32,
             device=device,
