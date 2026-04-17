@@ -271,11 +271,12 @@ class LTX23Pipeline(LTX2Pipeline):
         self.text_encoder.to("cpu")
         torch.cuda.empty_cache()
 
-        # Diffusers approach: stack all hidden states and flatten into
-        # [batch, seq_len, hidden_size * num_layers] = [B, 1024, 188160]
-        # This is what LTX-2.3 connectors expect (text_proj_in_factor=49).
+        # Stack all hidden states into 4D: [batch, seq_len, hidden_size, num_layers]
+        # The LTX-2.3 connectors expect this 4D format and flatten internally.
+        # (per_modality_projections=True path does per_token_rms_norm on 4D,
+        # then flatten(2,3) inside the connectors forward)
         text_encoder_hidden_states = torch.stack(text_encoder_hidden_states, dim=-1)
-        prompt_embeds = text_encoder_hidden_states.flatten(2, 3).to(dtype=dtype)
+        prompt_embeds = text_encoder_hidden_states.to(dtype=dtype)
 
         # Duplicate for num_videos_per_prompt
         _, seq_len, _ = prompt_embeds.shape
