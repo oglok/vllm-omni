@@ -579,15 +579,11 @@ class LTX23Pipeline(LTX2Pipeline):
     ):
         """Extract parameters from OmniDiffusionRequest, same logic as LTX2Pipeline."""
         if req is not None:
-            from vllm_omni.diffusion.models.ltx2.pipeline_ltx2 import _get_prompt_field
-
             sp = req.sampling_params
-            prompt = (
-                prompt or req.prompt
-                if isinstance(req.prompt, str)
-                else _get_prompt_field(req.prompt, "prompt") or prompt
-            )
-            negative_prompt = negative_prompt or sp.negative_prompt
+            # req.prompts is a list of str or dict with "prompt"/"negative_prompt" keys
+            prompt = [p if isinstance(p, str) else (p.get("prompt") or "") for p in req.prompts] or prompt
+            if not all(isinstance(p, str) or p.get("negative_prompt") is None for p in req.prompts):
+                negative_prompt = ["" if isinstance(p, str) else (p.get("negative_prompt") or "") for p in req.prompts]
             height = sp.height or height or 512
             width = sp.width or width or 768
             num_frames = sp.num_frames or num_frames or 121
