@@ -372,6 +372,11 @@ class LTX23Pipeline(LTX2Pipeline):
             self.connectors.to(device)
             self._connectors_on_device = True
 
+        logger.info(
+            "LTX23 connectors input: prompt_embeds=%s mask=%s",
+            prompt_embeds.shape,
+            prompt_attention_mask.shape,
+        )
         connector_prompt_embeds, connector_audio_prompt_embeds, connector_attention_mask = self.connectors(
             prompt_embeds, prompt_attention_mask, padding_side=tokenizer_padding_side
         )
