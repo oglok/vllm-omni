@@ -817,8 +817,9 @@ class LTX2VideoTransformerBlock(nn.Module):
         self.scale_shift_table = nn.Parameter(torch.randn(video_mod_param_num, dim) / dim**0.5)
         self.audio_scale_shift_table = nn.Parameter(torch.randn(audio_mod_param_num, audio_dim) / audio_dim**0.5)
 
-        # LTX-2.3: Prompt modulation tables (for STG / perturbed attention)
-        if perturbed_attn:
+        # Prompt cross-attn (attn2) additional modulation params
+        self.cross_attn_adaln = video_cross_attn_adaln or audio_cross_attn_adaln
+        if self.cross_attn_adaln:
             self.prompt_scale_shift_table = nn.Parameter(torch.randn(2, dim))
             self.audio_prompt_scale_shift_table = nn.Parameter(torch.randn(2, audio_dim))
 
