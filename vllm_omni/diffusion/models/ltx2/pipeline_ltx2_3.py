@@ -242,6 +242,7 @@ class LTX23Pipeline(LTX2Pipeline):
         device = device or self.device
         dtype = dtype or self.text_encoder.dtype
 
+        logger.info("LTX23 _get_gemma_prompt_embeds CALLED with prompt=%s", type(prompt))
         prompt = [prompt] if isinstance(prompt, str) else prompt
         batch_size = len(prompt)
 
@@ -285,6 +286,7 @@ class LTX23Pipeline(LTX2Pipeline):
         prompt_attention_mask = prompt_attention_mask.view(batch_size, -1)
         prompt_attention_mask = prompt_attention_mask.repeat(num_videos_per_prompt, 1)
 
+        logger.info("LTX23 _get_gemma returning: embeds=%s mask=%s", prompt_embeds.shape, prompt_attention_mask.shape)
         return prompt_embeds, prompt_attention_mask
 
     # ------------------------------------------------------------------
