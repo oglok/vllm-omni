@@ -204,7 +204,7 @@ def _try_resolve_omni_model_type(model: str) -> str | None:
     return best_match
 
 
-def resolve_model_config_path(model: str) -> str | None:
+def resolve_model_config_path(model: str) -> str:
     """Resolve the stage config file path from the model name.
 
     Resolves stage configuration path based on the model type and device type.
@@ -250,21 +250,6 @@ def resolve_model_config_path(model: str) -> str | None:
             except Exception as e:
                 raise ValueError(f"Failed to read config.json for model: {model}. Error: {e}") from e
         else:
-            # Raw safetensors models (e.g. Lightricks/LTX-2.3) have no
-            # config.json or model_index.json.  When --model-class-name is
-            # provided the caller does not need a stage config file, so
-            # returning None is safe -- the default_stage_cfg_factory in
-            # AsyncOmniEngine will create a diffusion stage config on the fly.
-            from vllm_omni.diffusion.utils.hf_utils import is_diffusion_model
-
-            if is_diffusion_model(model):
-                logger.info(
-                    "Raw diffusion model detected (%s) -- no stage config "
-                    "file required; a default diffusion stage will be created.",
-                    model,
-                )
-                return None
-
             raise ValueError(
                 f"Could not determine model_type for model: {model}. "
                 f"Model is not in standard transformers format and does not have model_index.json. "
@@ -314,11 +299,19 @@ def load_stage_configs_from_model(model: str, base_engine_args: dict | None = No
     stage_config_path = resolve_model_config_path(model)
     if stage_config_path is None:
         return []
-    stage_configs = load_stage_configs_from_yaml(config_path=stage_config_path, base_engine_args=base_engine_args)
+    stage_configs = load_stage_configs_from_yaml(
+        config_path=stage_config_path,
+        base_engine_args=base_engine_args,
+        prefer_stage_engine_args=True,
+    )
     return stage_configs
 
 
-def load_stage_configs_from_yaml(config_path: str, base_engine_args: dict | None = None) -> list:
+def load_stage_configs_from_yaml(
+    config_path: str,
+    base_engine_args: dict | None = None,
+    prefer_stage_engine_args: bool = True,
+) -> list:
     """Load stage configurations from a YAML file.
 
     .. deprecated::
@@ -326,6 +319,9 @@ def load_stage_configs_from_yaml(config_path: str, base_engine_args: dict | None
 
     Args:
         config_path: Path to the YAML configuration file
+        base_engine_args: Engine args supplied by the caller.
+        prefer_stage_engine_args: When True, YAML stage args override caller
+            engine args. When False, caller engine args override YAML defaults.
 
     Returns:
         List of stage configuration dictionaries from the file's stage_args
@@ -342,7 +338,11 @@ def load_stage_configs_from_yaml(config_path: str, base_engine_args: dict | None
         base_engine_args_tmp = base_engine_args.copy()
         # Update base_engine_args with stage-specific engine_args if they exist
         if hasattr(stage_arg, "engine_args") and stage_arg.engine_args is not None:
-            base_engine_args_tmp = create_config(merge_configs(base_engine_args_tmp, stage_arg.engine_args))
+            if prefer_stage_engine_args:
+                merged_engine_args = merge_configs(base_engine_args_tmp, stage_arg.engine_args)
+            else:
+                merged_engine_args = merge_configs(stage_arg.engine_args, base_engine_args_tmp)
+            base_engine_args_tmp = create_config(merged_engine_args)
         stage_type = getattr(stage_arg, "stage_type", "llm")
         if hasattr(stage_arg, "runtime") and stage_arg.runtime is not None and stage_type != "diffusion":
             base_engine_args_tmp.async_chunk = global_async_chunk

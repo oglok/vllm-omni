@@ -27,42 +27,6 @@ def _looks_like_bagel(model_name: str) -> bool:
         return False
 
 
-def _looks_like_raw_diffusion_model(model_name: str) -> bool:
-    """Detect raw safetensors diffusion models without diffusers/transformers config.
-
-    Models like Lightricks/LTX-2.3 ship only ``.safetensors`` files with no
-    ``config.json`` or ``model_index.json``.  We identify them by checking
-    that the HuggingFace repo (or local directory) contains ``.safetensors``
-    files but lacks standard config files.
-    """
-    # Local directory: check for .safetensors files without config.json
-    if os.path.isdir(model_name):
-        has_safetensors = any(f.endswith(".safetensors") for f in os.listdir(model_name))
-        has_config = os.path.exists(os.path.join(model_name, "config.json"))
-        has_model_index = os.path.exists(os.path.join(model_name, "model_index.json"))
-        if has_safetensors and not has_config and not has_model_index:
-            logger.debug("Detected raw safetensors diffusion model (local): %s", model_name)
-            return True
-        return False
-
-    # Remote HuggingFace repo: list files to check
-    try:
-        from huggingface_hub import HfApi
-
-        api = HfApi()
-        files = api.list_repo_files(model_name)
-        has_safetensors = any(f.endswith(".safetensors") for f in files)
-        has_config = "config.json" in files
-        has_model_index = "model_index.json" in files
-        if has_safetensors and not has_config and not has_model_index:
-            logger.debug("Detected raw safetensors diffusion model (remote): %s", model_name)
-            return True
-    except Exception as e:
-        logger.debug("Failed to check HF repo for raw safetensors: %s", e)
-
-    return False
-
-
 @lru_cache
 def is_diffusion_model(model_name: str) -> bool:
     """Check if a model is a diffusion model.
@@ -110,11 +74,4 @@ def is_diffusion_model(model_name: str) -> bool:
 
         # Bagel is not a diffusers pipeline (no model_index.json), but is still a
         # diffusion-style model in vllm-omni. Detect it via config.json.
-    if _looks_like_bagel(model_name):
-        return True
-
-    # Strategy 4: Detect raw safetensors models (e.g. Lightricks/LTX-2.3)
-    # that are neither diffusers format nor transformers format.
-    # These are identified by having .safetensors files but no config.json
-    # or model_index.json.
-    return _looks_like_raw_diffusion_model(model_name)
+    return _looks_like_bagel(model_name)
