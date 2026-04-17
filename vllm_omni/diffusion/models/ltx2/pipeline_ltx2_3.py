@@ -233,7 +233,9 @@ class LTX23Pipeline(LTX2Pipeline):
     # ------------------------------------------------------------------
     # Override: text encoder CPU <-> GPU offloading
     # ------------------------------------------------------------------
-    def _get_gemma_prompt_embeds(self, prompt, max_sequence_length, scale_factor, device=None, dtype=None):
+    def _get_gemma_prompt_embeds(
+        self, prompt, num_videos_per_prompt=1, max_sequence_length=1024, scale_factor=8, device=None, dtype=None
+    ):
         device = device or self.device
         dtype = dtype or self.text_encoder.dtype
 
