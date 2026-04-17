@@ -231,25 +231,61 @@ class LTX23Pipeline(LTX2Pipeline):
         return get_local_device()
 
     # ------------------------------------------------------------------
-    # Override: text encoder CPU <-> GPU offloading
+    # Override: text encoding uses diffusers approach (flatten all hidden states)
+    # instead of parent's _pack_text_embeds (layer selection and pooling).
+    # LTX-2.3 connectors expect [batch, seq_len, 3840*49=188160] input.
+    # Also handles CPU <-> GPU offloading of text encoder.
     # ------------------------------------------------------------------
     def _get_gemma_prompt_embeds(
         self, prompt, num_videos_per_prompt=1, max_sequence_length=1024, scale_factor=8, device=None, dtype=None
     ):
         device = device or self.device
-        # Move text encoder to GPU, run parent's method, move back to CPU
-        self.text_encoder.to(device)
-        result = super()._get_gemma_prompt_embeds(
+        dtype = dtype or self.text_encoder.dtype
+
+        prompt = [prompt] if isinstance(prompt, str) else prompt
+        batch_size = len(prompt)
+
+        if getattr(self, "tokenizer", None) is not None:
+            self.tokenizer.padding_side = "left"
+            if self.tokenizer.pad_token is None:
+                self.tokenizer.pad_token = self.tokenizer.eos_token
+
+        prompt = [p.strip() for p in prompt]
+        text_inputs = self.tokenizer(
             prompt,
-            num_videos_per_prompt=num_videos_per_prompt,
-            max_sequence_length=max_sequence_length,
-            scale_factor=scale_factor,
-            device=device,
-            dtype=dtype,
+            padding="max_length",
+            max_length=max_sequence_length,
+            truncation=True,
+            add_special_tokens=True,
+            return_tensors="pt",
         )
+        text_input_ids = text_inputs.input_ids.to(device)
+        prompt_attention_mask = text_inputs.attention_mask.to(device)
+
+        # Move text encoder to GPU, run, move back to CPU
+        self.text_encoder.to(device)
+        text_encoder_outputs = self.text_encoder(
+            input_ids=text_input_ids, attention_mask=prompt_attention_mask, output_hidden_states=True
+        )
+        text_encoder_hidden_states = text_encoder_outputs.hidden_states
         self.text_encoder.to("cpu")
         torch.cuda.empty_cache()
-        return result
+
+        # Diffusers approach: stack all hidden states and flatten into
+        # [batch, seq_len, hidden_size * num_layers] = [B, 1024, 188160]
+        # This is what LTX-2.3 connectors expect (text_proj_in_factor=49).
+        text_encoder_hidden_states = torch.stack(text_encoder_hidden_states, dim=-1)
+        prompt_embeds = text_encoder_hidden_states.flatten(2, 3).to(dtype=dtype)
+
+        # Duplicate for num_videos_per_prompt
+        _, seq_len, _ = prompt_embeds.shape
+        prompt_embeds = prompt_embeds.repeat(1, num_videos_per_prompt, 1)
+        prompt_embeds = prompt_embeds.view(batch_size * num_videos_per_prompt, seq_len, -1)
+
+        prompt_attention_mask = prompt_attention_mask.view(batch_size, -1)
+        prompt_attention_mask = prompt_attention_mask.repeat(num_videos_per_prompt, 1)
+
+        return prompt_embeds, prompt_attention_mask
 
     # ------------------------------------------------------------------
     # Override: connector call (padding_side instead of additive_mask)
