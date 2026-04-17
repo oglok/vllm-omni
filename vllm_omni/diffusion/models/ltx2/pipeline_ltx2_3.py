@@ -279,9 +279,10 @@ class LTX23Pipeline(LTX2Pipeline):
         prompt_embeds = text_encoder_hidden_states.to(dtype=dtype)
 
         # Duplicate for num_videos_per_prompt
-        _, seq_len, _ = prompt_embeds.shape
-        prompt_embeds = prompt_embeds.repeat(1, num_videos_per_prompt, 1)
-        prompt_embeds = prompt_embeds.view(batch_size * num_videos_per_prompt, seq_len, -1)
+        # prompt_embeds is 4D: [batch, seq_len, hidden_size, num_layers]
+        seq_len = prompt_embeds.shape[1]
+        prompt_embeds = prompt_embeds.repeat(1, num_videos_per_prompt, *([1] * (prompt_embeds.ndim - 2)))
+        prompt_embeds = prompt_embeds.view(batch_size * num_videos_per_prompt, seq_len, *prompt_embeds.shape[2:])
 
         prompt_attention_mask = prompt_attention_mask.view(batch_size, -1)
         prompt_attention_mask = prompt_attention_mask.repeat(num_videos_per_prompt, 1)
