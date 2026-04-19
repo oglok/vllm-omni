@@ -16,6 +16,10 @@ import json
 import os
 import tempfile
 
+import pytest
+
+pytestmark = [pytest.mark.core_model, pytest.mark.cpu]
+
 
 class TestPipelineIndependence:
     """Verify LTX23Pipeline is fully independent from LTX2Pipeline."""
