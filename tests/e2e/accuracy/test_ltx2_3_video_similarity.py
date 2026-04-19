@@ -120,6 +120,7 @@ def _run_vllm_omni_ltx23(*, model: str, output_dir: Path) -> list[Image.Image]:
     """Generate video using vLLM-Omni LTX23Pipeline and return frames."""
     from vllm_omni.entrypoints.omni import Omni
     from vllm_omni.inputs.data import OmniDiffusionSamplingParams
+    from vllm_omni.outputs import OmniRequestOutput
     from vllm_omni.platforms import current_omni_platform
 
     generator = torch.Generator(device=current_omni_platform.device_type).manual_seed(SEED)
@@ -142,24 +143,22 @@ def _run_vllm_omni_ltx23(*, model: str, output_dir: Path) -> list[Image.Image]:
         output_type="np",
     )
 
-    results = omni.generate(
-        prompts=[{"prompt": PROMPT, "negative_prompt": NEGATIVE_PROMPT}],
-        sampling_params=sampling_params,
-    )
+    prompt_dict = {"prompt": PROMPT, "negative_prompt": NEGATIVE_PROMPT}
+    results = omni.generate(prompt_dict, sampling_params)
 
-    # Extract video frames from result
-    result = results[0]
+    # Extract video frames following the text_to_video.py pattern
+    result = results[0] if isinstance(results, list) else results
     video_output = None
 
-    # The output could be in different places depending on the pipeline
-    if hasattr(result, "multimodal_output") and result.multimodal_output:
-        mm = result.multimodal_output
-        if "video" in mm:
-            video_output = mm["video"]
-    if video_output is None and hasattr(result, "images") and result.images:
-        video_output = result.images
-        if isinstance(video_output, list) and len(video_output) == 1:
-            video_output = video_output[0]
+    if isinstance(result, OmniRequestOutput):
+        # Check images field first (standard diffusion output path)
+        if result.images:
+            if len(result.images) == 1 and isinstance(result.images[0], tuple) and len(result.images[0]) == 2:
+                video_output = result.images[0][0]  # (video, audio) tuple
+            elif len(result.images) == 1 and isinstance(result.images[0], dict):
+                video_output = result.images[0].get("frames") or result.images[0].get("video")
+            else:
+                video_output = result.images
 
     if video_output is None:
         raise RuntimeError(f"No video output found in result: {result}")
@@ -169,8 +168,13 @@ def _run_vllm_omni_ltx23(*, model: str, output_dir: Path) -> list[Image.Image]:
     elif isinstance(video_output, list):
         if isinstance(video_output[0], list):
             frames = [img.convert("RGB") for img in video_output[0]]
+        elif isinstance(video_output[0], Image.Image):
+            frames = [img.convert("RGB") for img in video_output]
+        elif isinstance(video_output[0], np.ndarray):
+            # list of numpy frames
+            frames = _video_to_frames(np.stack(video_output))
         else:
-            frames = [img.convert("RGB") if isinstance(img, Image.Image) else img for img in video_output]
+            raise ValueError(f"Unexpected video output element type: {type(video_output[0])}")
     else:
         raise ValueError(f"Unexpected vllm-omni video output type: {type(video_output)}")
 
