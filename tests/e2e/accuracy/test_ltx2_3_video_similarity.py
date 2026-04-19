@@ -52,9 +52,13 @@ def _local_files_only(model: str) -> bool:
 
 
 def _video_to_frames(video_np: np.ndarray) -> list[Image.Image]:
-    """Convert a numpy video array [B, T, H, W, C] or [T, H, W, C] to a list of PIL Images."""
-    if video_np.ndim == 5:
-        video_np = video_np[0]  # Remove batch dim
+    """Convert a numpy video array to a list of PIL Images.
+
+    Handles shapes: [B, T, H, W, C], [T, H, W, C], or even [1, B, T, H, W, C].
+    Squeezes leading dimensions until we reach [T, H, W, C].
+    """
+    while video_np.ndim > 4:
+        video_np = video_np[0]  # Remove leading batch dims
     # video_np is now [T, H, W, C] with values in [0, 255] uint8 or [0, 1] float
     if video_np.dtype in (np.float32, np.float64, np.float16):
         video_np = np.clip(video_np * 255, 0, 255).astype(np.uint8)
