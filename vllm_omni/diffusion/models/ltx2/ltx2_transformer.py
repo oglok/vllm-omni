@@ -580,18 +580,34 @@ class LTX2Attention(torch.nn.Module):
 
         self.heads = self.query_num_heads
         tp_size = get_tensor_model_parallel_world_size()
-        self.norm_q = TensorParallelRMSNorm(
-            dim_head * self.query_num_heads,
-            eps=norm_eps,
-            elementwise_affine=norm_elementwise_affine,
-            tp_size=tp_size,
-        )
-        self.norm_k = TensorParallelRMSNorm(
-            dim_head * self.kv_num_heads,
-            eps=norm_eps,
-            elementwise_affine=norm_elementwise_affine,
-            tp_size=tp_size,
-        )
+        # At TP > 1 with rms_norm_across_heads, use TensorParallelRMSNorm
+        # which all-reduces squared sums to match global RMS statistics.
+        # At TP=1, use torch.nn.RMSNorm which is numerically identical to
+        # the diffusers reference (verified via hook-based comparison).
+        if tp_size > 1 and qk_norm == "rms_norm_across_heads":
+            self.norm_q = TensorParallelRMSNorm(
+                dim_head * self.query_num_heads,
+                eps=norm_eps,
+                elementwise_affine=norm_elementwise_affine,
+                tp_size=tp_size,
+            )
+            self.norm_k = TensorParallelRMSNorm(
+                dim_head * self.kv_num_heads,
+                eps=norm_eps,
+                elementwise_affine=norm_elementwise_affine,
+                tp_size=tp_size,
+            )
+        else:
+            self.norm_q = torch.nn.RMSNorm(
+                dim_head * self.query_num_heads,
+                eps=norm_eps,
+                elementwise_affine=norm_elementwise_affine,
+            )
+            self.norm_k = torch.nn.RMSNorm(
+                dim_head * self.kv_num_heads,
+                eps=norm_eps,
+                elementwise_affine=norm_elementwise_affine,
+            )
 
         self.to_out = torch.nn.ModuleList(
             [
@@ -1679,6 +1695,7 @@ class LTX2VideoTransformer3DModel(nn.Module):
         audio_coords: torch.Tensor | None = None,
         attention_kwargs: dict[str, Any] | None = None,
         return_dict: bool = True,
+        **kwargs,  # Accept extra diffusers kwargs (isolate_modalities, perturbation_mask, etc.)
     ) -> torch.Tensor:
         """
         Forward pass for LTX-2.0 audiovisual video transformer.
