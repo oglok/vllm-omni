@@ -104,23 +104,6 @@ def get_ltx2_post_process_func(od_config: OmniDiffusionConfig):
     return post_process_func
 
 
-class _VideoAudioScheduler:
-    """Composite scheduler dispatching to video and audio schedulers."""
-
-    def __init__(self, video_scheduler, audio_scheduler):
-        self.video_scheduler = video_scheduler
-        self.audio_scheduler = audio_scheduler
-
-    def step(self, noise_pred, t, latents, return_dict=False, generator=None):
-        video_out = self.video_scheduler.step(noise_pred[0], t[0], latents[0], return_dict=False, generator=generator)[
-            0
-        ]
-        audio_out = self.audio_scheduler.step(noise_pred[1], t[1], latents[1], return_dict=False, generator=generator)[
-            0
-        ]
-        return ((video_out, audio_out),)
-
-
 class LTX23Pipeline(nn.Module, ProgressBarMixin):
     """Fully independent LTX-2.3 pipeline.
 
@@ -798,7 +781,6 @@ class LTX23Pipeline(nn.Module, ProgressBarMixin):
             self.scheduler.config.get("max_shift", 2.05),
         )
         audio_scheduler = copy.deepcopy(self.scheduler)
-        video_audio_scheduler = _VideoAudioScheduler(self.scheduler, audio_scheduler)
         _ = retrieve_timesteps(audio_scheduler, num_inference_steps, device, timesteps, sigmas=sigmas, mu=mu)
         timesteps, num_inference_steps = retrieve_timesteps(
             self.scheduler,
@@ -825,20 +807,20 @@ class LTX23Pipeline(nn.Module, ProgressBarMixin):
             audio_latents.device,
         )
 
-        # ---- CFG: concatenate negative + positive for batch=2 denoising ----
+        # ---- CFG: concatenate negative + positive embeddings for batch=2 ----
         if self.do_classifier_free_guidance:
             connector_prompt_embeds = torch.cat([negative_connector_prompt_embeds, connector_prompt_embeds], dim=0)
             connector_audio_prompt_embeds = torch.cat(
                 [negative_connector_audio_prompt_embeds, connector_audio_prompt_embeds], dim=0
             )
             connector_attention_mask = torch.cat([negative_connector_attention_mask, connector_attention_mask], dim=0)
-            # Double latents, coords for batch=2
-            latents = torch.cat([latents, latents], dim=0)
-            audio_latents = torch.cat([audio_latents, audio_latents], dim=0)
             video_coords = torch.cat([video_coords, video_coords], dim=0)
             audio_coords = torch.cat([audio_coords, audio_coords], dim=0)
 
         # ---- Denoising loop ----
+        # Uses x0-space CFG (delta formulation) matching diffusers' LTX2Pipeline.
+        # The velocity predictions are converted to x0, guidance is applied in x0
+        # space, then converted back to velocity for the scheduler step.
         with self.progress_bar(total=len(timesteps)) as pbar:
             for i, t in enumerate(timesteps):
                 if self.interrupt:
@@ -846,8 +828,13 @@ class LTX23Pipeline(nn.Module, ProgressBarMixin):
 
                 self._current_timestep = t
 
-                latent_model_input = latents.to(connector_prompt_embeds.dtype)
-                audio_latent_model_input = audio_latents.to(connector_prompt_embeds.dtype)
+                # Duplicate latents for CFG (uncond + cond)
+                latent_model_input = torch.cat([latents] * 2) if self.do_classifier_free_guidance else latents
+                latent_model_input = latent_model_input.to(connector_prompt_embeds.dtype)
+                audio_latent_model_input = (
+                    torch.cat([audio_latents] * 2) if self.do_classifier_free_guidance else audio_latents
+                )
+                audio_latent_model_input = audio_latent_model_input.to(connector_prompt_embeds.dtype)
                 ts = t.expand(latent_model_input.shape[0])
 
                 with self._transformer_cache_context("cond_uncond"):
@@ -874,39 +861,29 @@ class LTX23Pipeline(nn.Module, ProgressBarMixin):
                 noise_pred_video = noise_pred_video.float()
                 noise_pred_audio = noise_pred_audio.float()
 
-                # CFG: chunk and apply guidance
+                # CFG in x0-space (delta formulation matching diffusers)
                 if self.do_classifier_free_guidance:
-                    v_uncond, v_text = noise_pred_video.chunk(2)
-                    noise_pred_video = v_uncond + guidance_scale * (v_text - v_uncond)
-                    a_uncond, a_text = noise_pred_audio.chunk(2)
-                    noise_pred_audio = a_uncond + guidance_scale * (a_text - a_uncond)
+                    noise_pred_video_uncond, noise_pred_video_cond = noise_pred_video.chunk(2)
+                    # Convert velocity to x0: x0 = sample - velocity * sigma
+                    x0_video_cond = latents - noise_pred_video_cond * self.scheduler.sigmas[i]
+                    x0_video_uncond = latents - noise_pred_video_uncond * self.scheduler.sigmas[i]
+                    video_cfg_delta = (guidance_scale - 1) * (x0_video_cond - x0_video_uncond)
+                    x0_video_guided = x0_video_cond + video_cfg_delta
 
-                    # Scheduler step: only on positive half of latents
-                    pos_latents = latents.chunk(2)[1]
-                    pos_audio_latents = audio_latents.chunk(2)[1]
-                    (pos_latents, pos_audio_latents) = video_audio_scheduler.step(
-                        (noise_pred_video, noise_pred_audio),
-                        (t, t),
-                        (pos_latents, pos_audio_latents),
-                        return_dict=False,
-                    )[0]
-                    # Re-duplicate for next iteration
-                    latents = torch.cat([pos_latents, pos_latents], dim=0)
-                    audio_latents = torch.cat([pos_audio_latents, pos_audio_latents], dim=0)
-                else:
-                    (latents, audio_latents) = video_audio_scheduler.step(
-                        (noise_pred_video, noise_pred_audio),
-                        (t, t),
-                        (latents, audio_latents),
-                        return_dict=False,
-                    )[0]
+                    noise_pred_audio_uncond, noise_pred_audio_cond = noise_pred_audio.chunk(2)
+                    x0_audio_cond = audio_latents - noise_pred_audio_cond * audio_scheduler.sigmas[i]
+                    x0_audio_uncond = audio_latents - noise_pred_audio_uncond * audio_scheduler.sigmas[i]
+                    audio_cfg_delta = (guidance_scale - 1) * (x0_audio_cond - x0_audio_uncond)
+                    x0_audio_guided = x0_audio_cond + audio_cfg_delta
+
+                    # Convert x0 back to velocity: v = (sample - x0) / sigma
+                    noise_pred_video = (latents - x0_video_guided) / self.scheduler.sigmas[i]
+                    noise_pred_audio = (audio_latents - x0_audio_guided) / audio_scheduler.sigmas[i]
+
+                latents = self.scheduler.step(noise_pred_video, t, latents, return_dict=False)[0]
+                audio_latents = audio_scheduler.step(noise_pred_audio, t, audio_latents, return_dict=False)[0]
 
                 pbar.update()
-
-        # ---- Extract final latents (positive half if CFG) ----
-        if self.do_classifier_free_guidance:
-            latents = latents.chunk(2)[0]
-            audio_latents = audio_latents.chunk(2)[0]
 
         # ---- Unpack and denormalize ----
         latents = self._unpack_latents(
