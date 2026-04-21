@@ -1955,8 +1955,12 @@ class LTX2VideoTransformer3DModel(nn.Module):
                 break
             else:
                 if name not in params_dict:
-                    # LTX-2.3 may have parameters not yet implemented
-                    # (e.g., perturbation-related weights). Skip gracefully.
+                    logger.warning(
+                        "Skipping transformer weight %s -- not found in model "
+                        "parameters. This may indicate an incomplete "
+                        "implementation or checkpoint mismatch.",
+                        name,
+                    )
                     continue
                 param = params_dict[name]
                 weight_loader = getattr(param, "weight_loader", None)
