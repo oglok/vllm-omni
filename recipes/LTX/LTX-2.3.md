@@ -23,35 +23,18 @@ encoder, VAE, and vocoder components.
 - Model: <https://huggingface.co/dg845/LTX-2.3-Diffusers>
 - Requires `diffusers >= 0.38.0` (install from git: `pip install git+https://github.com/huggingface/diffusers.git`)
 
-## Hardware Support
+## Serving
 
-## GPU
-
-### 1x NVIDIA RTX PRO 6000 Blackwell (96GB)
-
-#### Environment
-
-- OS: Ubuntu 22.04 (AWS Deep Learning AMI)
-- Python: 3.10+
-- Driver / runtime: CUDA 13.0, Driver 580.126.09
-- vLLM version: 0.19.x
-- vLLM-Omni version: 0.1.x (feature/ltx-2.3 branch)
-
-#### Command
+### Command
 
 ```bash
-# Set HF cache to NVMe for large model downloads (~90GB total)
-export HF_HOME=/opt/dlami/nvme/hf-cache
-export HF_HUB_DOWNLOAD_TIMEOUT=300
-
-# Serve the model
 vllm serve dg845/LTX-2.3-Diffusers \
   --omni \
   --model-class-name LTX23Pipeline \
   --stage-init-timeout 600
 ```
 
-#### Verification
+### Verification
 
 ```bash
 # Health check
@@ -90,7 +73,7 @@ curl -X POST http://localhost:8000/v1/videos \
   -F "guidance_scale=4.0"
 ```
 
-#### Notes
+### Notes
 
 - Memory usage: Model loads at ~36 GiB, peaks at ~62 GiB during inference
 - Key flags:
@@ -105,6 +88,20 @@ curl -X POST http://localhost:8000/v1/videos \
   - No image-to-video support yet (LTX23ImageToVideoPipeline is a placeholder)
   - No CFG-parallel support (single-GPU only)
   - Requires `diffusers >= 0.38.0` (not yet on PyPI, install from git)
+
+## Hardware Support
+
+## GPU
+
+### 1x NVIDIA RTX PRO 6000 Blackwell (96GB)
+
+#### Environment
+
+- OS: Ubuntu 22.04
+- Python: 3.10+
+- Driver / runtime: CUDA 13.0, Driver 580.126.09
+- vLLM version: 0.19.x
+- vLLM-Omni version: 0.19.x
 
 ### Validated configurations
 
