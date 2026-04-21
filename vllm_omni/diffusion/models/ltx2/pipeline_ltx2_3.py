@@ -726,7 +726,6 @@ class LTX23Pipeline(nn.Module, ProgressBarMixin):
         latent_width = width // self.vae_spatial_compression_ratio
         if latents is not None and latents.ndim == 5:
             _, _, latent_num_frames, latent_height, latent_width = latents.shape
-        video_sequence_length = latent_num_frames * latent_height * latent_width
 
         num_channels_latents = self.transformer.config.in_channels
         latents = self.prepare_latents(
@@ -767,8 +766,10 @@ class LTX23Pipeline(nn.Module, ProgressBarMixin):
 
         # ---- Scheduler setup ----
         sigmas = np.linspace(1.0, 1 / num_inference_steps, num_inference_steps) if sigmas is None else sigmas
+        # Use max_image_seq_len (not actual video_sequence_length) for mu calculation,
+        # matching diffusers' LTX2Pipeline which hardcodes this value.
         mu = calculate_shift(
-            video_sequence_length,
+            self.scheduler.config.get("max_image_seq_len", 4096),
             self.scheduler.config.get("base_image_seq_len", 1024),
             self.scheduler.config.get("max_image_seq_len", 4096),
             self.scheduler.config.get("base_shift", 0.95),
