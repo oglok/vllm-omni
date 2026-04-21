@@ -23,9 +23,9 @@ import numpy as np
 import pytest
 import torch
 from PIL import Image
-from tests.e2e.accuracy.utils import compute_image_ssim_psnr, model_output_dir
 
-from tests.utils import hardware_test
+from tests.e2e.accuracy.helpers import compute_image_ssim_psnr, model_output_dir
+from tests.helpers.mark import hardware_test
 
 MODEL_ID = "dg845/LTX-2.3-Diffusers"
 MODEL_ENV_VAR = "VLLM_TEST_LTX23_MODEL"
@@ -227,16 +227,14 @@ def _assert_video_similarity(
 @pytest.mark.benchmark
 @pytest.mark.diffusion
 @hardware_test(res={"cuda": "L4"}, num_cards=1)
-def test_ltx2_3_video_matches_diffusers(accuracy_artifact_root: Path = None, tmp_path: Path = None) -> None:
-    """Compare LTX-2.3 video: vLLM-Omni custom transformer vs diffusers transformer.
+def test_ltx2_3_transformer_matches_diffusers(accuracy_artifact_root: Path) -> None:
+    """Transformer-level parity: swap our transformer into diffusers pipeline.
 
-    Uses diffusers' LTX2Pipeline for both runs, swapping only the transformer
-    module to isolate numerical parity of the custom transformer implementation.
+    Isolates transformer numerical accuracy from pipeline-level differences.
+    Both runs use diffusers' denoising loop, CFG, scheduler, and RNG.
     """
     model = _model_name()
-    root = accuracy_artifact_root or tmp_path or Path("/tmp/ltx23_accuracy")
-    root.mkdir(parents=True, exist_ok=True)
-    output_dir = model_output_dir(root, MODEL_ID)
+    output_dir = model_output_dir(accuracy_artifact_root, MODEL_ID)
 
     print(f"\n--- Running diffusers baseline with {model} ---")
     diffusers_frames = _run_diffusers_pipeline(model=model, output_dir=output_dir)
