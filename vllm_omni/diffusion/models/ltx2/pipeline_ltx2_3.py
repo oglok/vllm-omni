@@ -318,6 +318,19 @@ class LTX23Pipeline(nn.Module, ProgressBarMixin):
         if do_classifier_free_guidance and negative_prompt_embeds is None:
             negative_prompt = negative_prompt or ""
             negative_prompt = batch_size * [negative_prompt] if isinstance(negative_prompt, str) else negative_prompt
+
+            if prompt is not None and type(prompt) is not type(negative_prompt):
+                raise TypeError(
+                    f"`negative_prompt` should be the same type as `prompt`, but got {type(negative_prompt)} !="
+                    f" {type(prompt)}."
+                )
+            if isinstance(negative_prompt, list) and batch_size != len(negative_prompt):
+                raise ValueError(
+                    f"`negative_prompt`: {negative_prompt} has batch size {len(negative_prompt)}, but `prompt`:"
+                    f" {prompt} has batch size {batch_size}. Please make sure that passed `negative_prompt` matches"
+                    " the batch size of `prompt`."
+                )
+
             negative_prompt_embeds, negative_prompt_attention_mask = self._get_gemma_prompt_embeds(
                 prompt=negative_prompt,
                 num_videos_per_prompt=num_videos_per_prompt,
@@ -545,6 +558,29 @@ class LTX23Pipeline(nn.Module, ProgressBarMixin):
             raise ValueError("Cannot forward both `prompt` and `prompt_embeds`.")
         elif prompt is None and prompt_embeds is None:
             raise ValueError("Provide either `prompt` or `prompt_embeds`.")
+        elif prompt is not None and not isinstance(prompt, (str, list)):
+            raise ValueError(f"`prompt` has to be of type `str` or `list` but is {type(prompt)}")
+
+        if prompt_embeds is not None and prompt_attention_mask is None:
+            raise ValueError("Must provide `prompt_attention_mask` when specifying `prompt_embeds`.")
+
+        if negative_prompt_embeds is not None and negative_prompt_attention_mask is None:
+            raise ValueError("Must provide `negative_prompt_attention_mask` when specifying `negative_prompt_embeds`.")
+
+        if prompt_embeds is not None and negative_prompt_embeds is not None:
+            if prompt_embeds.shape != negative_prompt_embeds.shape:
+                raise ValueError(
+                    "`prompt_embeds` and `negative_prompt_embeds` must have the same shape when passed directly, but"
+                    f" got: `prompt_embeds` {prompt_embeds.shape} != `negative_prompt_embeds`"
+                    f" {negative_prompt_embeds.shape}."
+                )
+            if prompt_attention_mask.shape != negative_prompt_attention_mask.shape:
+                raise ValueError(
+                    "`prompt_attention_mask` and `negative_prompt_attention_mask` must have the same shape when "
+                    "passed directly, but got: `prompt_attention_mask` "
+                    f"{prompt_attention_mask.shape} != `negative_prompt_attention_mask` "
+                    f"{negative_prompt_attention_mask.shape}."
+                )
 
     # ------------------------------------------------------------------
     # Cache context
