@@ -113,9 +113,3 @@ curl -X POST http://localhost:8000/v1/videos \
 | 3s | 81 | 768x512 | 30 | 4.0 | ~110s | ~62 GB |
 | 10s | 241 | 768x512 | 30 | 4.0 | ~130s | ~62 GB |
 | 20s | 481 | 768x512 | 30 | 4.0 | ~420s | ~62 GB |
-
-### AWS Instance Recommendation
-
-- **g7e.4xlarge** (1x NVIDIA RTX PRO 6000 Blackwell, 96GB): $3.36/hr on-demand
-- Deep Learning Base OSS Nvidia Driver GPU AMI (Ubuntu 22.04)
-- Redirect HF cache to NVMe: `export HF_HOME=/opt/dlami/nvme/hf-cache`

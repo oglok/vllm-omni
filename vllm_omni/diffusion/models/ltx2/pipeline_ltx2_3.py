@@ -951,17 +951,6 @@ class LTX23Pipeline(nn.Module, ProgressBarMixin):
         return loader.load_weights(weights)
 
 
-class LTX23TwoStagesPipeline(nn.Module):
-    """LTX-2.3 two-stage pipeline for image-to-video generation."""
-
-    def __init__(self, *, od_config: OmniDiffusionConfig, prefix: str = ""):
-        super().__init__()
-        raise NotImplementedError(
-            "LTX23TwoStagesPipeline is not yet implemented. "
-            "Use LTX23Pipeline for single-stage text-to-video generation."
-        )
-
-
 class LTX23ImageToVideoPipeline(nn.Module):
     """LTX-2.3 image-to-video pipeline placeholder."""
 
@@ -969,16 +958,5 @@ class LTX23ImageToVideoPipeline(nn.Module):
         super().__init__()
         raise NotImplementedError(
             "LTX23ImageToVideoPipeline is not yet implemented. "
-            "Use LTX23Pipeline for single-stage text-to-video generation."
-        )
-
-
-class LTX23ImageToVideoTwoStagesPipeline(nn.Module):
-    """LTX-2.3 I2V two-stage pipeline placeholder."""
-
-    def __init__(self, *, od_config: OmniDiffusionConfig, prefix: str = ""):
-        super().__init__()
-        raise NotImplementedError(
-            "LTX23ImageToVideoTwoStagesPipeline is not yet implemented. "
             "Use LTX23Pipeline for single-stage text-to-video generation."
         )

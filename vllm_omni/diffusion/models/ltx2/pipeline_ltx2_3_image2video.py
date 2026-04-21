@@ -9,12 +9,10 @@ This module exposes the I2V class names so the registry can find them.
 
 from .pipeline_ltx2_3 import (
     LTX23ImageToVideoPipeline,
-    LTX23ImageToVideoTwoStagesPipeline,
     get_ltx2_post_process_func,  # noqa: F401 - loaded by registry via getattr
 )
 
 __all__ = [
     "LTX23ImageToVideoPipeline",
-    "LTX23ImageToVideoTwoStagesPipeline",
     "get_ltx2_post_process_func",
 ]

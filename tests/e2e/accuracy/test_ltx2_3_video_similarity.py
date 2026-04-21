@@ -280,7 +280,7 @@ def _run_with_custom_transformer(model: str, output_dir: Path) -> list[Image.Ima
 @pytest.mark.advanced_model
 @pytest.mark.benchmark
 @pytest.mark.diffusion
-@hardware_test(res={"cuda": "L4"}, num_cards=1)
+@hardware_test(res={"cuda": "H100"}, num_cards=1)
 def test_ltx2_3_transformer_matches_diffusers(accuracy_artifact_root: Path) -> None:
     """Transformer-level parity: swap our transformer into diffusers pipeline.
 
@@ -376,7 +376,7 @@ def _run_vllm_omni_serving(model: str, output_dir: Path) -> list[Image.Image]:
 @pytest.mark.advanced_model
 @pytest.mark.benchmark
 @pytest.mark.diffusion
-@hardware_test(res={"cuda": "L4"}, num_cards=1)
+@hardware_test(res={"cuda": "H100"}, num_cards=1)
 def test_ltx2_3_pipeline_matches_diffusers(accuracy_artifact_root: Path) -> None:
     """Full-pipeline parity: vLLM-Omni serving stack vs diffusers.
 

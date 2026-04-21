@@ -53,14 +53,12 @@ class TestRegistryIntegration:
     """Verify all LTX-2.3 pipeline variants are registered."""
 
     def test_pipeline_models_registered(self):
-        """All 4 LTX-2.3 pipeline variants must be in _DIFFUSION_MODELS."""
+        """LTX-2.3 pipeline variants must be in _DIFFUSION_MODELS."""
         from vllm_omni.diffusion.registry import _DIFFUSION_MODELS
 
         expected = [
             "LTX23Pipeline",
             "LTX23ImageToVideoPipeline",
-            "LTX23TwoStagesPipeline",
-            "LTX23ImageToVideoTwoStagesPipeline",
         ]
         for name in expected:
             assert name in _DIFFUSION_MODELS, f"{name} not found in _DIFFUSION_MODELS"
@@ -69,45 +67,35 @@ class TestRegistryIntegration:
         """Registry entries must point to the correct modules."""
         from vllm_omni.diffusion.registry import _DIFFUSION_MODELS
 
-        # T2V and TwoStages -> pipeline_ltx2_3
+        # T2V -> pipeline_ltx2_3
         assert _DIFFUSION_MODELS["LTX23Pipeline"] == ("ltx2", "pipeline_ltx2_3", "LTX23Pipeline")
-        assert _DIFFUSION_MODELS["LTX23TwoStagesPipeline"] == ("ltx2", "pipeline_ltx2_3", "LTX23TwoStagesPipeline")
 
-        # I2V variants -> pipeline_ltx2_3_image2video
+        # I2V -> pipeline_ltx2_3_image2video
         assert _DIFFUSION_MODELS["LTX23ImageToVideoPipeline"] == (
             "ltx2",
             "pipeline_ltx2_3_image2video",
             "LTX23ImageToVideoPipeline",
         )
-        assert _DIFFUSION_MODELS["LTX23ImageToVideoTwoStagesPipeline"] == (
-            "ltx2",
-            "pipeline_ltx2_3_image2video",
-            "LTX23ImageToVideoTwoStagesPipeline",
-        )
 
     def test_post_process_funcs_registered(self):
-        """All 4 variants must map to get_ltx2_post_process_func."""
+        """Pipeline variants must map to get_ltx2_post_process_func."""
         from vllm_omni.diffusion.registry import _DIFFUSION_POST_PROCESS_FUNCS
 
         expected = [
             "LTX23Pipeline",
             "LTX23ImageToVideoPipeline",
-            "LTX23TwoStagesPipeline",
-            "LTX23ImageToVideoTwoStagesPipeline",
         ]
         for name in expected:
             assert name in _DIFFUSION_POST_PROCESS_FUNCS, f"{name} not in _DIFFUSION_POST_PROCESS_FUNCS"
             assert _DIFFUSION_POST_PROCESS_FUNCS[name] == "get_ltx2_post_process_func"
 
     def test_cache_dit_enablers_registered(self):
-        """All 4 variants must be registered in CUSTOM_DIT_ENABLERS."""
+        """Pipeline variants must be registered in CUSTOM_DIT_ENABLERS."""
         from vllm_omni.diffusion.cache.cache_dit_backend import CUSTOM_DIT_ENABLERS
 
         expected = [
             "LTX23Pipeline",
             "LTX23ImageToVideoPipeline",
-            "LTX23TwoStagesPipeline",
-            "LTX23ImageToVideoTwoStagesPipeline",
         ]
         for name in expected:
             assert name in CUSTOM_DIT_ENABLERS, f"{name} not in CUSTOM_DIT_ENABLERS"
@@ -206,13 +194,9 @@ class TestReExportModule:
 
     def test_i2v_classes_importable(self):
         """I2V classes must be importable from the re-export module."""
-        from vllm_omni.diffusion.models.ltx2.pipeline_ltx2_3_image2video import (
-            LTX23ImageToVideoPipeline,
-            LTX23ImageToVideoTwoStagesPipeline,
-        )
+        from vllm_omni.diffusion.models.ltx2.pipeline_ltx2_3_image2video import LTX23ImageToVideoPipeline
 
         assert LTX23ImageToVideoPipeline is not None
-        assert LTX23ImageToVideoTwoStagesPipeline is not None
 
     def test_post_process_func_importable(self):
         """get_ltx2_post_process_func must be importable from re-export module."""
@@ -222,21 +206,12 @@ class TestReExportModule:
 
     def test_i2v_classes_are_same_as_direct_import(self):
         """Re-exported classes must be the same objects as direct imports."""
-        from vllm_omni.diffusion.models.ltx2.pipeline_ltx2_3 import (
-            LTX23ImageToVideoPipeline as Direct,
-        )
-        from vllm_omni.diffusion.models.ltx2.pipeline_ltx2_3 import (
-            LTX23ImageToVideoTwoStagesPipeline as DirectTwoStages,
-        )
+        from vllm_omni.diffusion.models.ltx2.pipeline_ltx2_3 import LTX23ImageToVideoPipeline as Direct
         from vllm_omni.diffusion.models.ltx2.pipeline_ltx2_3_image2video import (
             LTX23ImageToVideoPipeline as ReExported,
         )
-        from vllm_omni.diffusion.models.ltx2.pipeline_ltx2_3_image2video import (
-            LTX23ImageToVideoTwoStagesPipeline as ReExportedTwoStages,
-        )
 
         assert Direct is ReExported
-        assert DirectTwoStages is ReExportedTwoStages
 
 
 class TestInitExports:
@@ -249,8 +224,6 @@ class TestInitExports:
         expected_classes = [
             "LTX23Pipeline",
             "LTX23ImageToVideoPipeline",
-            "LTX23TwoStagesPipeline",
-            "LTX23ImageToVideoTwoStagesPipeline",
         ]
         for name in expected_classes:
             assert hasattr(ltx2, name), f"{name} not exported from ltx2 package"
