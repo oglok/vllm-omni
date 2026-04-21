@@ -377,23 +377,12 @@ def _run_vllm_omni_serving(model: str, output_dir: Path) -> list[Image.Image]:
 @pytest.mark.benchmark
 @pytest.mark.diffusion
 @hardware_test(res={"cuda": "L4"}, num_cards=1)
-@pytest.mark.skip(
-    reason="OmniServer subprocess creates a different CUDA RNG state than "
-    "in-process diffusers, producing different initial latents from the "
-    "same seed (SSIM ~0.75). The transformer-swap test above confirms "
-    "numerical parity (SSIM 0.999987). Re-enable when pre-computed "
-    "latents are passed via OmniDiffusionSamplingParams.latents."
-)
 def test_ltx2_3_pipeline_matches_diffusers(accuracy_artifact_root: Path) -> None:
     """Full-pipeline parity: vLLM-Omni serving stack vs diffusers.
 
     Runs the complete vLLM-Omni OmniServer (subprocess, HTTP API, video
     encoding) and compares per-frame against stock diffusers output.
     Follows the Wan2.2 / Qwen Image pattern with seed-based determinism.
-
-    Currently skipped: RNG state diverges across process boundaries for
-    LTX-2.3 (the OmniServer subprocess initializes CUDA context differently,
-    shifting the generator state even with the same seed).
     """
     model = _model_name()
     output_dir = model_output_dir(accuracy_artifact_root, MODEL_ID)
