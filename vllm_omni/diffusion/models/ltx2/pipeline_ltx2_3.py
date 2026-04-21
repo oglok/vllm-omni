@@ -704,27 +704,21 @@ class LTX23Pipeline(nn.Module, ProgressBarMixin):
         )
 
         # ---- Connectors (LTX-2.3: padding_side API) ----
-        # Move connectors to GPU for encoding
+        # Concatenate negative + positive embeddings BEFORE connector call,
+        # matching diffusers which calls connectors once with batch=2.
+        # This ensures batch-dependent operations produce identical results.
+        if self.do_classifier_free_guidance:
+            prompt_embeds = torch.cat([negative_prompt_embeds, prompt_embeds], dim=0)
+            prompt_attention_mask = torch.cat([negative_prompt_attention_mask, prompt_attention_mask], dim=0)
+
         self.connectors.to(device)
         tokenizer_padding_side = getattr(self.tokenizer, "padding_side", "left")
         connector_prompt_embeds, connector_audio_prompt_embeds, connector_attention_mask = self.connectors(
             prompt_embeds, prompt_attention_mask, padding_side=tokenizer_padding_side
         )
-
-        # Negative prompt connectors for CFG
-        negative_connector_prompt_embeds = None
-        negative_connector_audio_prompt_embeds = None
-        negative_connector_attention_mask = None
-        if self.do_classifier_free_guidance:
-            (
-                negative_connector_prompt_embeds,
-                negative_connector_audio_prompt_embeds,
-                negative_connector_attention_mask,
-            ) = self.connectors(
-                negative_prompt_embeds, negative_prompt_attention_mask, padding_side=tokenizer_padding_side
-            )
         self.connectors.to("cpu")
-        torch.cuda.empty_cache()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
         # ---- Prepare latents ----
         latent_num_frames = (num_frames - 1) // self.vae_temporal_compression_ratio + 1
@@ -807,15 +801,11 @@ class LTX23Pipeline(nn.Module, ProgressBarMixin):
             audio_latents.device,
         )
 
-        # ---- CFG: concatenate negative + positive embeddings for batch=2 ----
+        # ---- CFG: duplicate coords for batch=2 ----
+        # Connector outputs are already batch=2 (neg+pos concatenated before connector call)
         if self.do_classifier_free_guidance:
-            connector_prompt_embeds = torch.cat([negative_connector_prompt_embeds, connector_prompt_embeds], dim=0)
-            connector_audio_prompt_embeds = torch.cat(
-                [negative_connector_audio_prompt_embeds, connector_audio_prompt_embeds], dim=0
-            )
-            connector_attention_mask = torch.cat([negative_connector_attention_mask, connector_attention_mask], dim=0)
-            video_coords = torch.cat([video_coords, video_coords], dim=0)
-            audio_coords = torch.cat([audio_coords, audio_coords], dim=0)
+            video_coords = video_coords.repeat((2,) + (1,) * (video_coords.ndim - 1))
+            audio_coords = audio_coords.repeat((2,) + (1,) * (audio_coords.ndim - 1))
 
         # ---- Denoising loop ----
         # Uses x0-space CFG (delta formulation) matching diffusers' LTX2Pipeline.
