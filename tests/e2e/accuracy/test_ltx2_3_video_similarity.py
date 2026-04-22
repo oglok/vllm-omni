@@ -24,6 +24,7 @@ import os
 import tempfile
 from pathlib import Path
 
+import diffusers
 import numpy as np
 import pytest
 import requests
@@ -34,6 +35,10 @@ from tests.e2e.accuracy.helpers import compute_image_ssim_psnr, model_output_dir
 from tests.helpers.env import run_post_test_cleanup, run_pre_test_cleanup
 from tests.helpers.mark import hardware_test
 from tests.helpers.runtime import OmniServer
+
+# Parse diffusers version for compatibility check
+_DIFFUSERS_VERSION = tuple(int(x) for x in diffusers.__version__.split(".")[:2] if x.isdigit())
+_DIFFUSERS_038 = _DIFFUSERS_VERSION >= (0, 38)
 
 MODEL_ID = "dg845/LTX-2.3-Diffusers"
 MODEL_ENV_VAR = "VLLM_TEST_LTX23_MODEL"
@@ -280,6 +285,9 @@ def _run_with_custom_transformer(model: str, output_dir: Path) -> list[Image.Ima
 @pytest.mark.advanced_model
 @pytest.mark.benchmark
 @pytest.mark.diffusion
+@pytest.mark.skipif(
+    not _DIFFUSERS_038, reason="LTX-2.3 requires diffusers >= 0.38.0 for cross_attn_mod and BWE vocoder"
+)
 @hardware_test(res={"cuda": "H100"}, num_cards=1)
 def test_ltx2_3_transformer_matches_diffusers(accuracy_artifact_root: Path) -> None:
     """Transformer-level parity: swap our transformer into diffusers pipeline.
@@ -376,6 +384,9 @@ def _run_vllm_omni_serving(model: str, output_dir: Path) -> list[Image.Image]:
 @pytest.mark.advanced_model
 @pytest.mark.benchmark
 @pytest.mark.diffusion
+@pytest.mark.skipif(
+    not _DIFFUSERS_038, reason="LTX-2.3 requires diffusers >= 0.38.0 for cross_attn_mod and BWE vocoder"
+)
 @hardware_test(res={"cuda": "H100"}, num_cards=1)
 def test_ltx2_3_pipeline_matches_diffusers(accuracy_artifact_root: Path) -> None:
     """Full-pipeline parity: vLLM-Omni serving stack vs diffusers.
