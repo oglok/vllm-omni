@@ -336,7 +336,7 @@ _CI_OVERLAYS: dict[str, dict[str, Any]] = {
                 "max_num_seqs": 5,
                 "max_model_len": 32768,
                 "load_format": "dummy",
-                "default_sampling_params": {"max_tokens": 1000},
+                "default_sampling_params": {"max_tokens": 1000, "temperature": 0.1},
             },
             {
                 "stage_id": 2,
