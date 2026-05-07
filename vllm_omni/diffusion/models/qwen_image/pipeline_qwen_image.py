@@ -487,6 +487,13 @@ class QwenImagePipeline(nn.Module, QwenImageCFGParallelMixin, DiffusionPipelineP
         prompt_embeds_mask = prompt_embeds_mask.repeat(1, num_images_per_prompt, 1)
         prompt_embeds_mask = prompt_embeds_mask.view(batch_size * num_images_per_prompt, seq_len)
 
+        # Match diffusers convention: drop all-True masks so the transformer
+        # uses its default text_seq_len path (from encoder_hidden_states.shape[1])
+        # instead of computing txt_seq_lens from the mask. This avoids subtle
+        # RoPE divergence that accumulates over diffusion steps.
+        if prompt_embeds_mask is not None and prompt_embeds_mask.all():
+            prompt_embeds_mask = None
+
         return prompt_embeds, prompt_embeds_mask
 
     @staticmethod
@@ -524,7 +531,6 @@ class QwenImagePipeline(nn.Module, QwenImageCFGParallelMixin, DiffusionPipelineP
         generator,
         latents=None,
     ) -> torch.Tensor:
-        # generator=torch.Generator(device="cuda").manual_seed(42)
         # VAE applies 8x compression on images but we must also account for packing which requires
         # latent height and width to be divisible by 2.
         height = 2 * (int(height) // (self.vae_scale_factor * 2))
