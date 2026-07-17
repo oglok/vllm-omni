@@ -275,6 +275,12 @@ _OMNI_MODELS = {
         "covo_audio_code2wav",
         "CovoAudioCode2WavForConditionalGeneration",
     ),
+    ## Parler-TTS
+    "ParlerTTSForConditionalGeneration": (
+        "parler_tts",
+        "modeling_parler_tts",
+        "ParlerTTSForGeneration",
+    ),
     ## MOSS-TTS-Nano
     "MossTTSNanoForCausalLM": (
         "moss_tts_nano",

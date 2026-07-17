@@ -20,6 +20,7 @@ list of supported architectures across all modalities, see
 | Ming-omni-tts | `inclusionAI/Ming-omni-tts-0.5B` | 2 (AR + audio VAE) | ✓ | ✓ | style / IP / dialect / TTA / podcast | 44.1 kHz |
 | Ming-flash-omni-TTS | `Jonathan1909/Ming-flash-omni-2.0` | single (talker only) | — (caption-controlled) | — | style / IP / basic captions | 44.1 kHz |
 | MOSS-TTS-Nano | `OpenMOSS-Team/MOSS-TTS-Nano` | single (AR + codec) | ✓ (required) | ✓ | voice_clone, continuation | 48 kHz |
+| Parler-TTS Large v1 | `parler-tts/parler-tts-large-v1` | single (enc-dec + DAC) | — (description-controlled) | ✓ | named speakers (Jon, Lea, etc.) | 44.1 kHz |
 | OmniVoice | `k2-fsa/OmniVoice` | 2 (gen + dec) | ✓ | — | voice design, language hint | 24 kHz |
 | Qwen3-TTS | `Qwen/Qwen3-TTS-12Hz-1.7B-{CustomVoice,VoiceDesign,Base}` | 2 (talker + code2wav) | ✓ (Base) | ✓ | 3 task variants | 24 kHz |
 | VoxCPM2 | `openbmb/VoxCPM2` | single (native AR) | ✓ | ✓ (online) | continuation | 48 kHz |
@@ -268,6 +269,40 @@ python examples/offline_inference/text_to_speech/moss_tts_nano/end2end.py \
 - Default `--max-new-frames 375` ≈ 14 s of audio; raise for longer outputs.
 - `--ref-text` is rejected in `voice_clone` mode and required only with `--mode continuation`.
 - Run `--help` for the full sampling-knob surface (`--audio-temperature`, `--audio-top-k`, `--audio-top-p`, `--text-temperature`).
+
+---
+
+## Parler-TTS Large v1
+
+Single-stage encoder-decoder TTS (2.2B) at 44.1 kHz. Uses a text *description*
+to condition voice characteristics instead of reference audio cloning. Trained on
+34 named speakers (Jon, Lea, Gary, Jenna, Mike, Laura, etc.).
+
+### Prerequisites
+```bash
+pip install git+https://github.com/huggingface/parler-tts.git
+pip install soundfile
+```
+
+### Run
+```bash
+# Default voice description
+python examples/offline_inference/text_to_speech/parler_tts/end2end.py \
+    --text "Hello, how are you doing today?"
+
+# Custom voice (named speaker)
+python examples/offline_inference/text_to_speech/parler_tts/end2end.py \
+    --text "Hello, how are you doing today?" \
+    --description "Jon's voice is monotone yet slightly fast in delivery, \
+      with a very close recording that almost has no background noise."
+```
+
+### Notes
+
+- Voice conditioning is via text description, not reference audio.
+- Use "very clear audio" in descriptions for highest quality.
+- Punctuation controls prosody (commas add small pauses).
+- Deploy config: `vllm_omni/deploy/parler_tts.yaml` (auto-loaded; override with `--deploy-config`).
 
 ---
 

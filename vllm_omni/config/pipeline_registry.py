@@ -79,6 +79,7 @@ from vllm_omni.model_executor.models.moss_tts.pipeline import (
 )
 from vllm_omni.model_executor.models.moss_tts_nano.pipeline import MOSS_TTS_NANO_PIPELINE
 from vllm_omni.model_executor.models.omnivoice.pipeline import OMNIVOICE_PIPELINE
+from vllm_omni.model_executor.models.parler_tts.pipeline import PARLER_TTS_PIPELINE
 from vllm_omni.model_executor.models.qwen2_5_omni.pipeline import (
     QWEN2_5_OMNI_PIPELINE,
     QWEN2_5_OMNI_THINKER_ONLY_PIPELINE,
@@ -123,6 +124,7 @@ OMNI_PIPELINES: dict[str, PipelineConfig | PipelineResolverFunc] = {
     "ming_flash_omni_thinker_only": MING_FLASH_OMNI_THINKER_ONLY_PIPELINE,
     "ming_flash_omni_image": MING_FLASH_OMNI_IMAGE_PIPELINE,
     "moss_tts_nano": MOSS_TTS_NANO_PIPELINE,
+    "parler_tts": PARLER_TTS_PIPELINE,
     "omnivoice": OMNIVOICE_PIPELINE,
     "mammoth_moda2": MAMMOTH_MODA2_PIPELINE,
     "mammoth_moda2_ar": MAMMOTH_MODA2_AR_PIPELINE,

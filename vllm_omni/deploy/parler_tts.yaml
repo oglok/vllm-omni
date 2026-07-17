@@ -1,0 +1,31 @@
+# Parler-TTS deploy: single-stage encoder-decoder TTS (2.2B).
+# Verified sizing for 1x A100 80GB / 1x H100 80GB.
+#
+# The model is an encoder-decoder that generates DAC codes from text and
+# voice description, then decodes to 44.1kHz audio. The full pipeline
+# runs inside one AR stage.
+#
+#   * enforce_eager=true — the model uses HuggingFace generate() internally;
+#     CUDA graph capture is not wired up.
+#   * gpu_memory_utilization=0.6 — T5-XL encoder + decoder + DAC codec
+#     need ~8-10 GiB in bf16.
+#   * max_num_seqs=4 — allows concurrent request streaming.
+async_chunk: false
+trust_remote_code: false
+
+stages:
+  - stage_id: 0
+    max_num_seqs: 4
+    gpu_memory_utilization: 0.6
+    enforce_eager: true
+    enable_prefix_caching: false
+    max_num_batched_tokens: 4096
+    max_model_len: 4096
+    devices: "0"
+    skip_mm_profiling: true
+    default_sampling_params:
+      temperature: 1.0
+      top_p: 1.0
+      top_k: 50
+      max_tokens: 4096
+      seed: 42

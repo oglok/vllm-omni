@@ -91,6 +91,7 @@ _OMNIVOICE_TTS_MODEL_STAGES = {"omnivoice_generator"}
 _COVO_AUDIO_MODEL_STAGES = {"fused_thinker_talker"}
 _VOXCPM2_TTS_MODEL_STAGES = {"latent_generator"}
 _MING_TTS_MODEL_STAGES = {"ming_tts"}
+_PARLER_TTS_MODEL_STAGES = {"parler_tts"}
 _MOSS_TTS_MODEL_STAGES = {"moss_tts_nano"}
 _MOSS_TTS_FULL_MODEL_STAGES = {"moss_tts", "moss_tts_codec"}
 _MOSS_TTS_LOCAL_MODEL_STAGES = {"moss_tts_local", "moss_tts_local_codec"}
@@ -116,6 +117,7 @@ _TTS_MODEL_STAGES: set[str] = (
     | _GLM_TTS_MODEL_STAGES
     | _STEP_AUDIO2_TTS_MODEL_STAGES
     | _INDEXTTS2_TTS_MODEL_STAGES
+    | _PARLER_TTS_MODEL_STAGES
 )
 _SAMPLING_MAX_TOKENS_TTS_MODEL_TYPES = {
     "fish_tts",
@@ -710,6 +712,8 @@ class OmniOpenAIServingSpeech(OpenAIServing, AudioMixin):
             return "ming_flash_omni_tts"
         if model_arch in _MING_TTS_MODEL_ARCHS:
             return "ming_tts"
+        if model_stage in _PARLER_TTS_MODEL_STAGES:
+            return "parler_tts"
         if model_stage in _MOSS_TTS_MODEL_STAGES:
             return "moss_tts_nano"
         if model_stage in _MOSS_TTS_FULL_MODEL_STAGES:
@@ -1507,6 +1511,10 @@ class OmniOpenAIServingSpeech(OpenAIServing, AudioMixin):
             return self._validate_ming_flash_omni_tts_request(request)
         if self._tts_model_type == "ming_tts":
             return self._validate_ming_tts_request(request)
+        if self._tts_model_type == "parler_tts":
+            if not request.input or not request.input.strip():
+                return "Input text cannot be empty"
+            return None
         if self._tts_model_type in ("moss_tts_nano", "moss_tts"):
             return self._validate_moss_tts_request(request)
         if self._tts_model_type == "glm_tts":
