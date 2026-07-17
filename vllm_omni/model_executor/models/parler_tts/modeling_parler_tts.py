@@ -41,6 +41,57 @@ from vllm_omni.platforms import current_omni_platform
 
 logger = init_logger(__name__)
 
+
+def _patch_parler_tts_for_transformers5() -> None:
+    """Apply compatibility patches for parler_tts with transformers >= 5.x.
+
+    The upstream parler_tts package pins transformers==4.46.1 and uses
+    internal APIs that were removed or changed in transformers 5.x:
+      1. ``isin_mps_friendly`` removed from ``transformers.pytorch_utils``
+      2. ``ParlerTTSConfig.__init__`` fails on no-args instantiation
+         (needed by ``to_diff_dict()``)
+      3. ``tie_weights()`` signature gained ``**kwargs``
+
+    These patches are applied once at import time so the rest of the
+    module can use ``parler_tts`` normally.
+    """
+    import transformers
+
+    if not hasattr(transformers.pytorch_utils, "isin_mps_friendly"):
+        transformers.pytorch_utils.isin_mps_friendly = torch.isin
+
+    try:
+        import parler_tts  # noqa: F401
+    except ImportError:
+        return
+
+    from parler_tts.configuration_parler_tts import ParlerTTSConfig
+
+    _orig_config_init = ParlerTTSConfig.__init__
+
+    def _patched_config_init(self, vocab_size=1024, prompt_cross_attention=False, **kwargs):
+        if "text_encoder" not in kwargs or "audio_encoder" not in kwargs or "decoder" not in kwargs:
+            super(ParlerTTSConfig, self).__init__(**kwargs)
+            self.vocab_size = vocab_size
+            self.prompt_cross_attention = prompt_cross_attention
+            self.has_no_defaults_at_init = True
+            return
+        _orig_config_init(self, vocab_size=vocab_size, prompt_cross_attention=prompt_cross_attention, **kwargs)
+
+    ParlerTTSConfig.__init__ = _patched_config_init
+
+    from parler_tts.modeling_parler_tts import ParlerTTSForConditionalGeneration
+
+    _orig_tie_weights = ParlerTTSForConditionalGeneration.tie_weights
+
+    def _patched_tie_weights(self, **kwargs):
+        if not hasattr(self.config, "tie_encoder_decoder"):
+            return
+        _orig_tie_weights(self)
+
+    ParlerTTSForConditionalGeneration.tie_weights = _patched_tie_weights
+
+
 _DEFAULT_CHUNK_SAMPLES = 44100
 _DEFAULT_SAMPLE_RATE = 44100
 
@@ -85,6 +136,8 @@ class ParlerTTSForGeneration(nn.Module):
             model_dtype = torch.float32
 
         logger.info("Loading Parler-TTS from %s (dtype=%s)", self.model_path, model_dtype)
+
+        _patch_parler_tts_for_transformers5()
 
         try:
             from parler_tts import ParlerTTSForConditionalGeneration
