@@ -11,7 +11,7 @@
 #     need ~8-10 GiB in bf16.
 #   * max_num_seqs=4 — allows concurrent request streaming.
 async_chunk: false
-trust_remote_code: false
+trust_remote_code: true
 
 stages:
   - stage_id: 0
