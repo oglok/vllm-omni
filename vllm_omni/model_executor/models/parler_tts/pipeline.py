@@ -9,6 +9,7 @@ pattern (one audio chunk yielded per forward call) to drive progressive
 streaming through the AR scheduler.
 """
 
+import vllm_omni.model_executor.models.parler_tts.configuration_parler_tts  # noqa: F401 — register AutoConfig
 from vllm_omni.config.stage_config import (
     PipelineConfig,
     StageExecutionType,
