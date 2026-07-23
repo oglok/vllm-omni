@@ -151,7 +151,8 @@ class ParlerTTSForGeneration(nn.Module):
         self._model = ParlerTTSForConditionalGeneration.from_pretrained(
             self.model_path,
             torch_dtype=model_dtype,
-        ).to(device)
+            device_map={"": device},
+        )
         self._model.eval()
 
         self._tokenizer = AutoTokenizer.from_pretrained(self.model_path)
