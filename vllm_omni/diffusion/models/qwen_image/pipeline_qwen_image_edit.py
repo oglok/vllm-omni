@@ -464,6 +464,8 @@ class QwenImageEditPipeline(
             prompt_embeds (`torch.Tensor`, *optional*):
                 Pre-generated text embeddings. Can be used to easily tweak text inputs, *e.g.* prompt weighting. If not
                 provided, text embeddings will be generated from `prompt` input argument.
+            prompt_embeds_mask (`torch.Tensor`, *optional*):
+                Attention mask for `prompt_embeds`. `None` means all tokens are valid.
         """
 
         prompt = [prompt] if isinstance(prompt, str) else prompt
@@ -483,10 +485,6 @@ class QwenImageEditPipeline(
         if prompt_embeds_mask is not None:
             prompt_embeds_mask = prompt_embeds_mask.repeat(1, num_images_per_prompt, 1)
             prompt_embeds_mask = prompt_embeds_mask.view(batch_size * num_images_per_prompt, seq_len)
-            # Match diffusers convention: set all-True masks to None so the
-            # transformer skips masked attention and uses the full sequence.
-            if prompt_embeds_mask.all():
-                prompt_embeds_mask = None
 
         return prompt_embeds, prompt_embeds_mask
 
