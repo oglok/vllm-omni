@@ -304,9 +304,16 @@ class DuplexSessionRunner:
                 default_payload=default_payload if isinstance(default_payload, Mapping) else None,
                 initial_session_update=True,
             )
-        # Every client speaks the Realtime protocol now; the old runner forced
-        # the ACK-only playback ledger for that path.
-        session.config.playback_commit_policy = DuplexPlaybackCommitPolicy.ACK_ONLY.value
+        # Only barge-in-capable models need the ACK-only playback ledger (a
+        # client-reported playback position is how a cancelled response gets
+        # truncated to what was actually heard). Models without it have no
+        # such truncation need, and forcing ACK_ONLY on them is harmful: a
+        # turn only gets registered into conversation history as a side
+        # effect of a successful ack, and an ack can only succeed while its
+        # response is still the session's active one -- a race fast turns
+        # regularly lose, leaving responses stuck un-committed indefinitely.
+        if session.capabilities.supports_barge_in:
+            session.config.playback_commit_policy = DuplexPlaybackCommitPolicy.ACK_ONLY.value
         self.control.init_turn_detection()
         self._worker = self._loop.create_task(self._run(), name=f"duplex-session-{session.session_id}")
         self.emit({"type": "session.created", "session": session.as_public_dict()})

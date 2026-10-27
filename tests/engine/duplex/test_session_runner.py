@@ -28,7 +28,12 @@ from vllm.sampling_params import SamplingParams
 from vllm_omni.config.stage_config import DuplexSessionRuntimeConfig
 from vllm_omni.engine.duplex import commands
 from vllm_omni.engine.duplex.commands import DuplexCommand
-from vllm_omni.engine.duplex.config import DuplexSessionConfig, DuplexSessionState
+from vllm_omni.engine.duplex.config import (
+    DuplexCapabilities,
+    DuplexPlaybackCommitPolicy,
+    DuplexSessionConfig,
+    DuplexSessionState,
+)
 from vllm_omni.engine.duplex.contracts import (
     DuplexOutputContext,
     DuplexRequestIdentity,
@@ -499,6 +504,30 @@ async def test_open_announces_the_session_and_reserves_the_stage0_request() -> N
         # Admission reserves the resumable Stage0 request atomically with the open.
         assert [context.request_id for context in h.port.ensured] == [h.stage0_request_id(epoch=0)]
         assert h.stage0_request_id(epoch=0) == "duplex-s.ZHVwbGV4LXRlc3Q.e.0.r.stage0"
+    finally:
+        await close_harness(h)
+
+
+@pytest.mark.asyncio
+async def test_open_forces_ack_only_for_barge_in_capable_models() -> None:
+    h = await open_harness()
+    try:
+        assert h.session.capabilities.supports_barge_in is True
+        assert h.session.config.playback_commit_policy == DuplexPlaybackCommitPolicy.ACK_ONLY.value
+    finally:
+        await close_harness(h)
+
+
+@pytest.mark.asyncio
+async def test_open_preserves_commit_all_on_done_for_non_barge_in_models() -> None:
+    class _NoBargeInPlugin(MiniCPMO45DuplexPlugin):
+        def capabilities(self, *, max_sessions: int) -> DuplexCapabilities:
+            return replace(super().capabilities(max_sessions=max_sessions), supports_barge_in=False)
+
+    h = await open_harness(plugin=_NoBargeInPlugin(_fake_encode_audio))
+    try:
+        assert h.session.capabilities.supports_barge_in is False
+        assert h.session.config.playback_commit_policy == DuplexPlaybackCommitPolicy.COMMIT_ALL_ON_DONE.value
     finally:
         await close_harness(h)
 
